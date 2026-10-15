@@ -1,0 +1,22 @@
+"""Build a basic HTML web page."""
+
+from htmpy import Element, body, h1, head, html, p
+
+
+def basic_page() -> Element:
+    """Create a basic HTML web page."""
+
+    page = html(
+        {"lang": "en"},
+        head(),
+        body(
+            h1("Hello there!"),
+            p(
+                "This is just a basic web page that is used for a FastAPI web app example. "
+                "The page is returned as a HTMLResponse object in FastAPI."
+            ),
+            p("The last paragraph is here."),
+        ),
+    )
+
+    return page
