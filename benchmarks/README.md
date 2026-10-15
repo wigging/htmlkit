@@ -32,3 +32,24 @@ Lower is faster. Timings depend on the machine and Python version; this small
 page is not representative of every workload.
 
 Jinja is a development dependency, not an htmpy runtime dependency.
+
+## Unordered list benchmark
+
+```sh
+uv run benchmarks/unordered_list.py
+```
+
+Creates an unordered list with 1,000 list items. The htmpy path uses a Python
+list comprehension to construct fresh `li` elements and passes them to `ul`; the Jinja
+path uses a template for-loop over the same input strings. Both return complete
+HTML strings and escape dynamic text containing `&` and angle brackets.
+The script checks both outputs against independently constructed expected HTML
+before timing.
+
+Like the simple page benchmark, this reports median time using five `timeit`
+repeats, with input preparation, Jinja compilation, validation, and printing
+excluded. Each repeat renders 1,000 lists rather than 10,000 pages to keep the
+larger workload practical. Results are in microseconds per complete list, not
+per item. There is no separate htmpy reused path because the bare `ul` and `li`
+elements already serve as reusable templates; no static subtrees or attribute
+dictionaries need preparation.

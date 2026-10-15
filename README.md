@@ -26,10 +26,22 @@ Output (rendered without extra whitespace):
 
 ## Elements and content
 
-The supported elements are `html`, `head`, `meta`, `link`, `body`, `h1`, and `p`. Call an element
-with an optional leading attribute dictionary and any number of children.
+The supported elements are `html`, `head`, `meta`, `link`, `body`, `h1`, `p`, `ul`, `ol`,
+and `li`. Call an element with an optional leading attribute dictionary and any number of children.
 Omit the dictionary when no attributes are needed. Convert an element to HTML with
 `str(element)` or `print(element)`. The `html` element includes the HTML5 doctype.
+
+Use `ul` for unordered lists, `ol` for ordered lists, and `li` for their items.
+Lists can be nested inside list items:
+
+```python
+from htmpy import ul, ol, li
+
+items = ul(
+    li("Apples"),
+    li("Steps", ol({"start": 2}, li("Prepare"), li("Serve"))),
+)
+```
 
 Use `meta` and `link` inside `head` for metadata and linked resources:
 
