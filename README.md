@@ -62,7 +62,7 @@ provide additional tags, raw HTML, or a command-line interface.
 
 ```sh
 uv sync
-uv run python -m unittest discover -s tests
+uv run pytest
 uv run ruff check .
 uv run ty check
 ```
