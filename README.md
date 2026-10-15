@@ -1,0 +1,68 @@
+# htmpy
+
+Write HTML in Python. Requires Python 3.14 or newer, with no runtime dependencies.
+Pass an optional attribute dictionary first, followed by child elements or text.
+
+```python
+from htmpy import html, head, body, h1, p
+
+page = html(
+    {"lang": "en"},
+    head(),
+    body(
+        h1("Hello from Python"),
+        p({"class": "intro"}, "Write HTML with htmpy."),
+    ),
+)
+
+print(page)
+```
+
+Output (rendered without extra whitespace):
+
+```html
+<!doctype html><html lang="en"><head></head><body><h1>Hello from Python</h1><p class="intro">Write HTML with htmpy.</p></body></html>
+```
+
+## Elements and content
+
+The initial elements are `html`, `head`, `body`, `h1`, and `p`. Call an element
+with an optional leading attribute dictionary and any number of children.
+Omit the dictionary when no attributes are needed. Convert an element to HTML with
+`str(element)` or `print(element)`. The `html` element includes the HTML5 doctype.
+
+Children can be text, integers, other elements, or nested lists and tuples of
+children. `None` produces no content. Text and attribute values are escaped
+automatically; strings are never treated as raw HTML.
+
+```python
+str(p("A < B & C"))
+# '<p>A &lt; B &amp; C</p>'
+
+str(p({"class": "note", "data-id": 7}, "Note"))
+# '<p class="note" data-id="7">Note</p>'
+```
+
+Attribute names are literal HTML names, such as `"class"` and `"data-id"`; no
+underscore conversion is performed. The attribute dictionary must come first.
+Keyword attributes and square-bracket children are not supported.
+Values can be strings, integers, booleans, or `None`: `True` emits a bare
+attribute, while `False` and `None` omit it. Attribute escaping does not make
+untrusted JavaScript or other executable attribute values safe.
+
+Elements are reusable: each call creates a new element. Calling an existing
+element merges attributes and replaces its children. Text and elements may be
+mixed as consecutive children; spaces must be included in the text explicitly.
+Children are rendered when attached and attributes are copied, so later changes
+to an input list or dictionary do not change an existing element.
+This foundation does not validate HTML nesting or
+provide additional tags, raw HTML, or a command-line interface.
+
+## Development
+
+```sh
+uv sync
+uv run python -m unittest discover -s tests
+uv run ruff check .
+uv run ty check
+```
