@@ -1,13 +1,13 @@
 """HTML element construction, attribute validation, and rendering."""
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from enum import Enum
 from functools import lru_cache
 from html import escape
 from typing import NamedTuple, Self
 
-type Child = str | int | Element | None | list[Child] | tuple[Child, ...]
+type Child = str | int | Element | _Fragment | None | list[Child] | tuple[Child, ...]
 type Attribute = str | int | bool | None
 
 _ATTRIBUTE_NAME = re.compile(r"[A-Za-z_:][A-Za-z0-9_.:-]*")
@@ -30,7 +30,7 @@ def _render_child(child: Child | Mapping[str, Attribute]) -> str:
         return escape(child, quote=False)
     if child is None:
         return ""
-    if isinstance(child, Element):
+    if isinstance(child, (Element, _Fragment)):
         return str(child)
     if isinstance(child, (str, int)):
         return escape(str(child), quote=False)
@@ -41,6 +41,15 @@ def _render_child(child: Child | Mapping[str, Attribute]) -> str:
     if isinstance(child, Mapping):
         raise TypeError("Attributes must be the first argument, not a child")
     raise TypeError(f"Unsupported HTML child: {type(child).__name__}")
+
+
+class _Fragment(NamedTuple):
+    """Already escaped HTML produced by repeating an element."""
+
+    rendered: str
+
+    def __str__(self) -> str:
+        return self.rendered
 
 
 class _Tag(NamedTuple):
@@ -129,6 +138,18 @@ class Element(tuple[_Tag, str]):
             )
             return tuple.__new__(type(self), (definition, rendered))
         return type(self)(definition.name, attributes, content)
+
+    def repeat(self, items: Iterable[Child], /) -> _Fragment:
+        """Render one element per item, reusing attributes and replacing children."""
+        definition = self[0]
+        if not definition.closing:
+            raise ValueError(f"The {definition.name} element cannot have children")
+        opening, closing = definition.opening, definition.closing
+        parts = []
+        for item in items:
+            content = escape(item, quote=False) if type(item) is str else _render_child(item)
+            parts.extend((opening, content, closing))
+        return _Fragment("".join(parts))
 
     def encode(self, encoding: str = "utf-8", errors: str = "strict") -> bytes:
         """Encode rendered HTML for consumers such as FastAPI's HTMLResponse."""

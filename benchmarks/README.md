@@ -39,11 +39,13 @@ Jinja is a development dependency, not an htmpy runtime dependency.
 uv run benchmarks/unordered_list.py
 ```
 
-Creates an unordered list with 1,000 list items. The htmpy path uses a Python
-list comprehension to construct fresh `li` elements and passes them to `ul`; the Jinja
-path uses a template for-loop over the same input strings. Both return complete
+Creates an unordered list with 1,000 list items. The original htmpy path uses a Python
+list comprehension to construct fresh `li` elements and passes them to `ul`.
+The **htmpy repeat** path uses `ul(li.repeat(items))`, avoiding intermediate element
+objects. The Jinja path uses a template for-loop over the same input strings.
+All three return complete
 HTML strings and escape dynamic text containing `&` and angle brackets.
-The script checks both outputs against independently constructed expected HTML
+The script checks all three outputs against independently constructed expected HTML
 before timing.
 
 Like the simple page benchmark, this reports median time using five `timeit`

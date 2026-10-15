@@ -162,3 +162,44 @@ def test_attribute_snapshot():
     element = body(attributes, "Before ", p("inside"), " after.")
     attributes["class"] = "changed"
     assert str(element) == '<body class="intro">Before <p>inside</p> after.</body>'
+
+
+def test_repeat():
+    row = li({"class": 'a&"b'}, "replaced")
+    nested: list[Child] = ["雪 & ", p("<inside>")]
+    items: list[Child] = ['<one> "\' &', 0, None, nested]
+    fragment = row.repeat(item for item in items)
+    items.clear()
+    nested.clear()
+    expected = (
+        '<li class="a&amp;&quot;b">&lt;one&gt; "\' &amp;</li>'
+        '<li class="a&amp;&quot;b">0</li>'
+        '<li class="a&amp;&quot;b"></li>'
+        '<li class="a&amp;&quot;b">雪 &amp; <p>&lt;inside&gt;</p></li>'
+    )
+    assert str(fragment) == expected
+    assert str(ul(fragment)) == f"<ul>{expected}</ul>"
+    assert str(body("Before ", [fragment, (fragment,)], " after")) == (
+        f"<body>Before {expected}{expected} after</body>"
+    )
+    assert str(p.repeat([fragment])) == f"<p>{expected}</p>"
+    assert str(row) == '<li class="a&amp;&quot;b">replaced</li>'
+    assert str(ul(li.repeat([]))) == "<ul></ul>"
+    assert str(ul(str(li.repeat(["<unsafe>"])))) == (
+        "<ul>&lt;li&gt;&amp;lt;unsafe&amp;gt;&lt;/li&gt;</ul>"
+    )
+    for cloned in (copy(fragment), deepcopy(fragment), loads(dumps(fragment))):
+        assert str(ul(cloned)) == f"<ul>{expected}</ul>"
+
+
+@pytest.mark.parametrize("items", [[{"id": "not-an-attribute-update"}], [object()]])
+def test_repeat_rejects_invalid_content(items):
+    with pytest.raises(TypeError):
+        li.repeat(items)
+
+
+def test_repeat_rejects_void_elements():
+    for element in (meta, link):
+        for items in ([], [None], ["text"]):
+            with pytest.raises(ValueError, match="cannot have children"):
+                element.repeat(items)

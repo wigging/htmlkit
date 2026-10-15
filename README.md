@@ -43,6 +43,27 @@ items = ul(
 )
 ```
 
+For repeated elements, use `repeat()` to avoid constructing an element object
+for every item:
+
+```python
+items = ul(li.repeat(["Apples", "Pears & peaches"]))
+
+row = li({"class": "result"})
+items = ul(row.repeat(name for name in ["Alice", "Bob"]))
+```
+
+`repeat()` immediately consumes an iterable and returns an immutable HTML
+fragment that can be passed as a child or rendered with `str()`. Each item becomes
+one element, reusing the receiver's attributes and replacing its original children.
+Items may be text, integers, elements, fragments, `None`, or nested lists and
+tuples of children. `None` creates an empty element; an empty iterable creates an
+empty fragment. Text is escaped normally, and later input mutations do not affect
+the fragment. Dictionaries are not supported as items; configure shared attributes
+on the receiver instead. Void elements (`meta` and `link`) reject `repeat()`, even
+for an empty iterable. Pass fragments directly as children: converting one to
+`str` first makes it ordinary text, which will be escaped again.
+
 Use `meta` and `link` inside `head` for metadata and linked resources:
 
 ```python
