@@ -47,6 +47,10 @@ class Element:
             rendered.append(_render_child(child))
         return replace(self, _attributes=tuple(merged.items()), _content="".join(rendered))
 
+    def encode(self, encoding: str = "utf-8", errors: str = "strict") -> bytes:
+        """Encode rendered HTML for consumers such as FastAPI's HTMLResponse."""
+        return str(self).encode(encoding, errors)
+
     def __str__(self) -> str:
         attributes = []
         for name, value in self._attributes:

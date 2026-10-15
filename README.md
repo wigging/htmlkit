@@ -58,6 +58,30 @@ to an input list or dictionary do not change an existing element.
 This foundation does not validate HTML nesting or
 provide additional tags, raw HTML, or a command-line interface.
 
+## FastAPI
+
+Pass an element directly to FastAPI's `HTMLResponse`. Elements provide an
+`encode()` method that renders escaped HTML and encodes it as UTF-8 by default.
+FastAPI is not a runtime dependency of htmpy; install it separately in your app.
+
+```python
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
+from htmpy import html, body, h1, p
+
+app = FastAPI()
+
+
+@app.get("/", response_class=HTMLResponse)
+def index():
+    page = html(body(h1("Hello"), p("Built with htmpy.")))
+    return HTMLResponse(page)
+```
+
+Return the `HTMLResponse` itself, rather than a bare element, to bypass FastAPI's
+JSON serialization. Alternatively, return `str(page)` from a route declared with
+`response_class=HTMLResponse`.
+
 ## Development
 
 ```sh

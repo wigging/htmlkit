@@ -1,6 +1,29 @@
 import pytest
+from fastapi.responses import HTMLResponse
 
 from htmpy import Child, body, h1, head, html, p
+
+
+def test_html_response():
+    page = html(body(p({"title": '"café"'}, "雪 & <hello>")))
+    response = HTMLResponse(page, status_code=201)
+    expected = (
+        '<!doctype html><html><body><p title="&quot;café&quot;">'
+        "雪 &amp; &lt;hello&gt;</p></body></html>"
+    ).encode()
+    assert response.body == expected
+    assert response.status_code == 201
+    assert response.headers["content-type"] == "text/html; charset=utf-8"
+    assert response.headers["content-length"] == str(len(expected))
+
+
+def test_encode():
+    element = p("café")
+    assert element.encode() == b"<p>caf\xc3\xa9</p>"
+    assert element.encode("latin-1") == b"<p>caf\xe9</p>"
+    assert element.encode("ascii", errors="xmlcharrefreplace") == b"<p>caf&#233;</p>"
+    with pytest.raises(UnicodeEncodeError):
+        element.encode("ascii")
 
 
 def test_document():
