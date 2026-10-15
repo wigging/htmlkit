@@ -5,25 +5,39 @@ from timeit import repeat
 
 from jinja2 import Environment
 
-from htmpy import body, h1, head, html, p
+from htmpy import body, h1, head, html, link, meta, p
 
 CONTEXT = {"heading": "Hello & welcome", "message": "Build a simple <HTML> page."}
 TEMPLATE = Environment(autoescape=True).from_string(
-    '<!doctype html><html lang="en"><head></head><body>'
+    '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+    '<link rel="stylesheet" href="/styles.css"></head><body>'
     '<h1>{{ heading }}</h1><p class="intro">{{ message }}</p></body></html>'
 )
+PAGE = html({"lang": "en"})
+HEAD = head(
+    meta({"charset": "utf-8"}),
+    link({"rel": "stylesheet", "href": "/styles.css"}),
+)
+PARAGRAPH = p({"class": "intro"})
 NUMBER = 10_000
 REPEAT = 5
 
 
-def render_htmpy() -> str:
+def render_htmpy_fresh() -> str:
     return str(
         html(
             {"lang": "en"},
-            head(),
+            head(
+                meta({"charset": "utf-8"}),
+                link({"rel": "stylesheet", "href": "/styles.css"}),
+            ),
             body(h1(CONTEXT["heading"]), p({"class": "intro"}, CONTEXT["message"])),
         )
     )
+
+
+def render_htmpy() -> str:
+    return str(PAGE(HEAD, body(h1(CONTEXT["heading"]), PARAGRAPH(CONTEXT["message"]))))
 
 
 def render_jinja() -> str:
@@ -32,17 +46,22 @@ def render_jinja() -> str:
 
 def main() -> None:
     expected = (
-        '<!doctype html><html lang="en"><head></head><body>'
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<link rel="stylesheet" href="/styles.css"></head><body>'
         '<h1>Hello &amp; welcome</h1><p class="intro">'
-        'Build a simple &lt;HTML&gt; page.</p></body></html>'
+        "Build a simple &lt;HTML&gt; page.</p></body></html>"
     )
-    assert render_htmpy() == render_jinja() == expected
+    assert render_htmpy_fresh() == render_htmpy() == render_jinja() == expected
 
     print(f"{REPEAT} repeats of {NUMBER:,} pages; median time per page")
-    print("Jinja template compilation excluded; autoescaping enabled.")
-    for name, render in (("htmpy", render_htmpy), ("Jinja", render_jinja)):
+    print("Static htmpy preparation and Jinja compilation excluded; autoescaping enabled.")
+    for name, render in (
+        ("htmpy fresh", render_htmpy_fresh),
+        ("htmpy reused", render_htmpy),
+        ("Jinja", render_jinja),
+    ):
         seconds = median(repeat(render, number=NUMBER, repeat=REPEAT)) / NUMBER
-        print(f"{name:6}: {seconds * 1_000_000:9.2f} µs/page")
+        print(f"{name:12}: {seconds * 1_000_000:9.2f} µs/page")
 
 
 if __name__ == "__main__":

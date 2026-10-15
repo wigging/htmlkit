@@ -10,6 +10,7 @@ type Child = str | int | Element | None | list[Child] | tuple[Child, ...]
 type Attribute = str | int | bool | None
 
 _ATTRIBUTE_NAME = re.compile(r"[A-Za-z_:][A-Za-z0-9_.:-]*")
+_VOID_TAGS = frozenset({"meta", "link"})
 
 
 @lru_cache(maxsize=256)
@@ -66,6 +67,8 @@ class Element:
             else:
                 attributes = updates
             children = children[1:]
+        if self._tag in _VOID_TAGS and children:
+            raise ValueError(f"The {self._tag} element cannot have children")
         if not children:
             content = ""
         elif len(children) == 1:
@@ -80,8 +83,9 @@ class Element:
 
     def __str__(self) -> str:
         doctype = "<!doctype html>" if self._tag == "html" else ""
+        ending = "" if self._tag in _VOID_TAGS else f"{self._content}</{self._tag}>"
         if not self._attributes:
-            return f"{doctype}<{self._tag}>{self._content}</{self._tag}>"
+            return f"{doctype}<{self._tag}>{ending}"
         attributes = []
         for name, value in self._attributes:
             if value is None or value is False:
@@ -90,4 +94,4 @@ class Element:
                 attributes.append(f" {name}")
             else:
                 attributes.append(f' {name}="{escape(str(value), quote=True)}"')
-        return f"{doctype}<{self._tag}{''.join(attributes)}>{self._content}</{self._tag}>"
+        return f"{doctype}<{self._tag}{''.join(attributes)}>{ending}"

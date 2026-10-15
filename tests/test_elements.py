@@ -1,7 +1,7 @@
 import pytest
 from fastapi.responses import HTMLResponse
 
-from htmpy import Child, body, h1, head, html, p
+from htmpy import Child, body, h1, head, html, link, meta, p
 
 
 def test_html_response():
@@ -35,6 +35,48 @@ def test_document():
     assert str(html()) == "<!doctype html><html></html>"
 
 
+def test_head_metadata():
+    page = html(
+        head(
+            meta({"charset": "utf-8"}),
+            meta({"name": "description", "content": 'A & "B"'}),
+            link({"rel": "stylesheet", "href": "/style.css?a=1&b=2"}),
+        ),
+        body(p("Hello")),
+    )
+    assert str(page) == (
+        '<!doctype html><html><head><meta charset="utf-8">'
+        '<meta name="description" content="A &amp; &quot;B&quot;">'
+        '<link rel="stylesheet" href="/style.css?a=1&amp;b=2">'
+        "</head><body><p>Hello</p></body></html>"
+    )
+
+
+@pytest.mark.parametrize("element, tag", [(meta, "meta"), (link, "link")])
+def test_void_elements(element, tag):
+    assert str(element) == f"<{tag}>"
+    assert str(element()) == f"<{tag}>"
+    base = element({"id": "original"})
+    assert str(base({"id": "updated", "hidden": True, "title": None})) == (
+        f'<{tag} id="updated" hidden>'
+    )
+    assert str(base) == f'<{tag} id="original">'
+    assert str(base({"id": None})) == f"<{tag}>"
+    with pytest.raises(ValueError, match=f"The {tag} element cannot have children"):
+        element("text")
+    with pytest.raises(ValueError, match=f"The {tag} element cannot have children"):
+        element({"id": "example"}, p("child"))
+
+
+@pytest.mark.parametrize(
+    "element, attrs",
+    [(p, {"cls": "intro"}), (p, {"content": "Hello"}), (meta, {"charset": "utf-8"})],
+)
+def test_keyword_arguments_rejected(element, attrs):
+    with pytest.raises(TypeError):
+        element(**attrs)
+
+
 @pytest.mark.parametrize("element, tag", [(head, "head"), (body, "body"), (h1, "h1"), (p, "p")])
 def test_empty(element, tag):
     assert str(element()) == f"<{tag}></{tag}>"
@@ -49,9 +91,10 @@ def test_escaping():
 
 
 def test_attributes():
-    assert str(
-        p({"class": "intro", "data-id": 7, "hidden": True, "title": None, "inert": False})
-    ) == '<p class="intro" data-id="7" hidden></p>'
+    assert (
+        str(p({"class": "intro", "data-id": 7, "hidden": True, "title": None, "inert": False}))
+        == '<p class="intro" data-id="7" hidden></p>'
+    )
     assert str(p({"tabindex": 0})) == '<p tabindex="0"></p>'
     assert str(p({"data_id": "literal"})) == '<p data_id="literal"></p>'
     assert str(p({}, "Hello")) == "<p>Hello</p>"

@@ -26,10 +26,25 @@ Output (rendered without extra whitespace):
 
 ## Elements and content
 
-The initial elements are `html`, `head`, `body`, `h1`, and `p`. Call an element
+The supported elements are `html`, `head`, `meta`, `link`, `body`, `h1`, and `p`. Call an element
 with an optional leading attribute dictionary and any number of children.
 Omit the dictionary when no attributes are needed. Convert an element to HTML with
 `str(element)` or `print(element)`. The `html` element includes the HTML5 doctype.
+
+Use `meta` and `link` inside `head` for metadata and linked resources:
+
+```python
+from htmpy import head, meta, link
+
+metadata = head(
+    meta({"charset": "utf-8"}),
+    meta({"name": "viewport", "content": "width=device-width, initial-scale=1"}),
+    link({"rel": "stylesheet", "href": "/styles.css"}),
+)
+```
+
+These are void elements: they render without closing tags and reject child
+arguments with `ValueError` (including `None` or empty lists).
 
 Children can be text, integers, other elements, or nested lists and tuples of
 children. `None` produces no content. Text and attribute values are escaped
@@ -56,7 +71,7 @@ mixed as consecutive children; spaces must be included in the text explicitly.
 Children are rendered when attached and attributes are copied, so later changes
 to an input list or dictionary do not change an existing element.
 This foundation does not validate HTML nesting or
-provide additional tags, raw HTML, or a command-line interface.
+provide tags beyond those listed above, raw HTML, or a command-line interface.
 
 ## FastAPI
 
