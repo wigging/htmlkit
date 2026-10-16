@@ -1,17 +1,35 @@
 """HTML element construction, attribute validation, and rendering."""
 
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from enum import Enum
 from functools import lru_cache
 from html import escape
-from typing import NamedTuple, Self
+from typing import NamedTuple, Self, overload
 
 type Child = str | int | Element | _Fragment | None | list[Child] | tuple[Child, ...]
 type Attribute = str | int | bool | None
 
 _ATTRIBUTE_NAME = re.compile(r"[A-Za-z_:][A-Za-z0-9_.:-]*")
-_VOID_TAGS = frozenset({"meta", "link"})
+_TAG_NAME = re.compile(r"[a-z][a-z0-9-]*")
+_VOID_TAGS = frozenset(
+    {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
+)
 
 
 class _Missing(Enum):
@@ -60,17 +78,43 @@ class _Tag(NamedTuple):
 
 
 class Element(tuple[_Tag, str]):
-    """An immutable HTML element with an optional attribute dictionary first."""
+    """An immutable HTML element built from a tag, leading mapping, and children."""
 
     # Share the tag definition between calls; store fully rendered HTML per element.
     __slots__ = ()
 
+    @overload
+    def __new__(cls, tag: str, /, *children: Child) -> Self: ...
+
+    @overload
     def __new__(
+        cls, tag: str, attributes: Mapping[str, Attribute], /, *children: Child
+    ) -> Self: ...
+
+    def __new__(
+        cls,
+        tag: str,
+        first: Child | Mapping[str, Attribute] | _Missing = _Missing.CHILD,
+        /,
+        *children: Child,
+    ) -> Self:
+        if not isinstance(tag, str):
+            raise TypeError("HTML tag name must be a string")
+        if not _TAG_NAME.fullmatch(tag):
+            raise ValueError(f"Invalid HTML tag name: {tag!r}")
+        element: Self = cls._from_content(tag)
+        if first is _Missing.CHILD:
+            return element
+        return element.__call__(first, *children)
+
+    @classmethod
+    def _from_content(
         cls,
         _tag: str,
         _attributes: tuple[tuple[str, Attribute], ...] = (),
         _content: str = "",
     ) -> Self:
+        """Construct from validated attributes and already escaped content."""
         doctype = "<!doctype html>" if _tag == "html" else ""
         ending = "" if _tag in _VOID_TAGS else f"</{_tag}>"
         attributes = []
@@ -85,26 +129,33 @@ class Element(tuple[_Tag, str]):
         rendered = f"{opening}{_content}{ending}" if ending else opening
         return tuple.__new__(cls, (_Tag(_tag, _attributes, opening, ending), rendered))
 
+    @overload
+    def __call__(self, /, *children: Child) -> Self: ...
+
+    @overload
+    def __call__(self, attributes: Mapping[str, Attribute], /, *children: Child) -> Self: ...
+
     def __call__(
         self,
         first: Child | Mapping[str, Attribute] | _Missing = _Missing.CHILD,
         /,
-        *children: Child | Mapping[str, Attribute],
-    ) -> Element:
+        *children: Child,
+    ) -> Self:
         """Set children, optionally merging attributes from a leading dictionary."""
         definition = self[0]
         if type(first) is str and not children and definition.closing:
             content = escape(first, quote=False)
             rendered = f"{definition.opening}{content}{definition.closing}"
             return tuple.__new__(type(self), (definition, rendered))
+        arguments: tuple[Child | Mapping[str, Attribute], ...] = children
         if first is not _Missing.CHILD:
-            children = (first, *children)
+            arguments = (first, *children)
         attributes = definition.attributes
-        if children and (
-            isinstance(children[0], dict)
-            or (type(children[0]) not in (str, Element) and isinstance(children[0], Mapping))
+        if arguments and (
+            isinstance(arguments[0], dict)
+            or (type(arguments[0]) not in (str, Element) and isinstance(arguments[0], Mapping))
         ):
-            updates = tuple(children[0].items())
+            updates = tuple(arguments[0].items())
             for name, value in updates:
                 valid = (
                     _valid_attribute_name(name)
@@ -121,15 +172,15 @@ class Element(tuple[_Tag, str]):
                 attributes = tuple(merged.items())
             else:
                 attributes = updates
-            children = children[1:]
-        if not definition.closing and children:
+            arguments = arguments[1:]
+        if not definition.closing and arguments:
             raise ValueError(f"The {definition.name} element cannot have children")
-        if not children:
+        if not arguments:
             content = ""
-        elif len(children) == 1:
-            content = _render_child(children[0])
+        elif len(arguments) == 1:
+            content = _render_child(arguments[0])
         else:
-            content = "".join([_render_child(child) for child in children])
+            content = "".join([_render_child(child) for child in arguments])
         if attributes is definition.attributes:
             rendered = (
                 f"{definition.opening}{content}{definition.closing}"
@@ -137,7 +188,7 @@ class Element(tuple[_Tag, str]):
                 else definition.opening
             )
             return tuple.__new__(type(self), (definition, rendered))
-        return type(self)(definition.name, attributes, content)
+        return type(self)._from_content(definition.name, attributes, content)
 
     def repeat(self, items: Iterable[Child], /) -> _Fragment:
         """Render one element per item, reusing attributes and replacing children."""
@@ -158,11 +209,13 @@ class Element(tuple[_Tag, str]):
     def __str__(self) -> str:
         return self[1]
 
-    def __getnewargs__(self) -> tuple[str, tuple[tuple[str, Attribute], ...], str]:
+    def __reduce__(
+        self,
+    ) -> tuple[Callable[..., Self], tuple[str, tuple[tuple[str, Attribute], ...], str]]:
         definition = self[0]
         content = (
             self[1][len(definition.opening) : -len(definition.closing)]
             if definition.closing
             else ""
         )
-        return definition.name, definition.attributes, content
+        return type(self)._from_content, (definition.name, definition.attributes, content)

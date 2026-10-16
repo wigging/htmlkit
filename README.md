@@ -32,6 +32,13 @@ leading attribute dictionary and any number of children.
 Omit the dictionary when no attributes are needed. Convert an element to HTML with
 `str(element)` or `print(element)`. The `html` element includes the HTML5 doctype.
 
+For other tags, use `Element("section", {"class": "note"}, "Text", p("Child"))`.
+Import `Element` from `htmpy`. Its positional arguments after the tag follow the
+same rules as tag calls: an optional leading mapping, then escaped children.
+Tag names must match `[a-z][a-z0-9-]*`; standard HTML void tags reject children.
+Construction from raw HTML strings is not public API. Tag and attribute names
+must still be trusted: escaping is not an HTML or JavaScript sanitizer.
+
 Use `ul` for unordered lists, `ol` for ordered lists, and `li` for their items.
 Lists can be nested inside list items:
 
@@ -105,7 +112,7 @@ mixed as consecutive children; spaces must be included in the text explicitly.
 Children are rendered when attached and attributes are copied, so later changes
 to an input list or dictionary do not change an existing element.
 This foundation does not validate HTML nesting or
-provide tags beyond those listed above, raw HTML, or a command-line interface.
+provide raw HTML or a command-line interface.
 
 ## FastAPI
 

@@ -1,11 +1,13 @@
 from copy import copy, deepcopy
 from pickle import dumps, loads
+from types import MappingProxyType
 
 import pytest
 from fastapi.responses import HTMLResponse
 
 from htmpy import (
     Child,
+    Element,
     a,
     aside,
     body,
@@ -27,6 +29,61 @@ from htmpy import (
     p,
     ul,
 )
+
+
+def test_public_construction():
+    attributes = {"title": '"<&'}
+    children: list[Child] = ["<unsafe>&", p("<nested>")]
+    element = Element("section", MappingProxyType(attributes), children)
+    attributes.clear()
+    children.clear()
+    expected = '<section title="&quot;&lt;&amp;">&lt;unsafe&gt;&amp;<p>&lt;nested&gt;</p></section>'
+    assert str(element) == expected
+    assert str(Element("p", "<unsafe>&")) == "<p>&lt;unsafe&gt;&amp;</p>"
+    assert str(Element("p", (), "<unsafe>&")) == "<p>&lt;unsafe&gt;&amp;</p>"
+    assert str(element({"title": None}, "<next>")) == "<section>&lt;next&gt;</section>"
+    assert str(element.repeat(["<one>", "&"])) == (
+        '<section title="&quot;&lt;&amp;">&lt;one&gt;</section>'
+        '<section title="&quot;&lt;&amp;">&amp;</section>'
+    )
+    for cloned in (copy(element), deepcopy(element), loads(dumps(element))):
+        assert str(cloned) == expected
+    assert str(Element("html", Element("my-widget"))) == (
+        "<!doctype html><html><my-widget></my-widget></html>"
+    )
+
+
+@pytest.mark.parametrize("tag", ["", "P", "p onclick=x", "p><script", "p/", "p\n"])
+def test_invalid_tag(tag):
+    with pytest.raises(ValueError, match="Invalid HTML tag name"):
+        Element(tag)
+
+
+@pytest.mark.parametrize(
+    "attributes, error",
+    [({'x="injected"': "value"}, ValueError), ({"title": []}, TypeError)],
+)
+def test_constructor_attributes(attributes, error):
+    with pytest.raises(error):
+        Element("p", attributes, "text")
+
+
+def test_constructor_rejects_raw_keywords():
+    with pytest.raises(TypeError):
+        Element(_tag="p", _attributes=(), _content="<script>")  # ty: ignore[no-matching-overload]
+    with pytest.raises(TypeError):
+        Element("p", "text", {"id": "late"})  # ty: ignore[no-matching-overload]
+
+
+@pytest.mark.parametrize("tag", ["meta", "link", "img", "br"])
+def test_constructor_void(tag):
+    element = Element(tag, {"id": "example"})
+    assert str(element) == f'<{tag} id="example">'
+    for child in ("text", "", None, []):
+        with pytest.raises(ValueError, match="cannot have children"):
+            Element(tag, child)
+    for cloned in (copy(element), deepcopy(element), loads(dumps(element))):
+        assert str(cloned) == str(element)
 
 
 def test_html_response():
@@ -177,9 +234,9 @@ def test_attributes():
 
 def test_attribute_order():
     with pytest.raises(TypeError):
-        p("Hello", {"class": "intro"})
+        p("Hello", {"class": "intro"})  # ty: ignore[no-matching-overload]
     with pytest.raises(TypeError):
-        p({"id": "first"}, {"class": "intro"})
+        p({"id": "first"}, {"class": "intro"})  # ty: ignore[no-matching-overload]
 
 
 def test_reuse():
