@@ -26,8 +26,9 @@ Output (rendered without extra whitespace):
 
 ## Elements and content
 
-The supported elements are `html`, `head`, `meta`, `link`, `body`, `h1`, `p`, `ul`, `ol`,
-and `li`. Call an element with an optional leading attribute dictionary and any number of children.
+The supported elements are `html`, `head`, `meta`, `link`, `body`, `h1`–`h6`, `p`, `ul`,
+`ol`, `li`, `button`, `a`, `div`, `main`, and `aside`. Call an element with an optional
+leading attribute dictionary and any number of children.
 Omit the dictionary when no attributes are needed. Convert an element to HTML with
 `str(element)` or `print(element)`. The `html` element includes the HTML5 doctype.
 

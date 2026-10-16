@@ -4,7 +4,29 @@ from pickle import dumps, loads
 import pytest
 from fastapi.responses import HTMLResponse
 
-from htmpy import Child, body, h1, head, html, li, link, meta, ol, p, ul
+from htmpy import (
+    Child,
+    a,
+    aside,
+    body,
+    button,
+    div,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    head,
+    html,
+    li,
+    link,
+    main,
+    meta,
+    ol,
+    p,
+    ul,
+)
 
 
 def test_html_response():
@@ -89,6 +111,35 @@ def test_empty(element, tag):
     assert str(element()) == f"<{tag}></{tag}>"
 
 
+@pytest.mark.parametrize(
+    "element, tag",
+    [(h1, "h1"), (h2, "h2"), (h3, "h3"), (h4, "h4"), (h5, "h5"), (h6, "h6")],
+)
+def test_headings(element, tag):
+    assert str(element()) == f"<{tag}></{tag}>"
+    assert str(element("Section & <title>")) == f"<{tag}>Section &amp; &lt;title&gt;</{tag}>"
+    assert str(element({"id": "section"}, "Section ", 2)) == (
+        f'<{tag} id="section">Section 2</{tag}>'
+    )
+
+
+@pytest.mark.parametrize(
+    "element, tag, attrs, rendered_attrs",
+    [
+        (button, "button", {"type": "button", "disabled": True}, ' type="button" disabled'),
+        (a, "a", {"href": "/?a=1&b=2"}, ' href="/?a=1&amp;b=2"'),
+        (div, "div", {"class": "panel"}, ' class="panel"'),
+        (main, "main", {"id": "content"}, ' id="content"'),
+        (aside, "aside", {"aria-label": "Related"}, ' aria-label="Related"'),
+    ],
+)
+def test_controls_and_containers(element, tag, attrs, rendered_attrs):
+    assert str(element()) == f"<{tag}></{tag}>"
+    assert str(element(attrs, "A & <B>", [" details ", 2])) == (
+        f"<{tag}{rendered_attrs}>A &amp; &lt;B&gt; details 2</{tag}>"
+    )
+
+
 def test_lists():
     element = ul(
         {"class": "items"},
@@ -167,7 +218,7 @@ def test_attribute_snapshot():
 def test_repeat():
     row = li({"class": 'a&"b'}, "replaced")
     nested: list[Child] = ["雪 & ", p("<inside>")]
-    items: list[Child] = ['<one> "\' &', 0, None, nested]
+    items: list[Child] = ["<one> \"' &", 0, None, nested]
     fragment = row.repeat(item for item in items)
     items.clear()
     nested.clear()
