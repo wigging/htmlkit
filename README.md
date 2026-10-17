@@ -26,18 +26,20 @@ Output (rendered without extra whitespace):
 
 ## Elements and content
 
-The supported elements are `html`, `head`, `meta`, `link`, `body`, `h1`–`h6`, `p`, `ul`,
-`ol`, `li`, `button`, `a`, `div`, `main`, and `aside`. Call an element with an optional
+Every conforming element in the HTML Living Standard is available by its tag name,
+from `html`, `head`, `title`, and `body` through `form`, `input`, `table`, `script`,
+and `dialog`. The `del` element is named `del_` because `del` is a Python keyword;
+the foreign `svg` and `math` elements are omitted. Call an element with an optional
 leading attribute dictionary and any number of children.
 Omit the dictionary when no attributes are needed. Convert an element to HTML with
 `str(element)` or `print(element)`. The `html` element includes the HTML5 doctype.
 
-For other tags, use `Element("section", {"class": "note"}, "Text", p("Child"))`.
+For custom elements, use `Element("my-widget", {"class": "note"}, "Text", p("Child"))`.
 Import `Element` from `htmpy`. Its positional arguments after the tag follow the
 same rules as tag calls: an optional leading mapping, then escaped children.
 Tag names must match `[a-z][a-z0-9-]*`; standard HTML void tags reject children.
-Construction from raw HTML strings is not public API. Tag and attribute names
-must still be trusted: escaping is not an HTML or JavaScript sanitizer.
+Tag and attribute names must still be trusted: escaping is not an HTML or
+JavaScript sanitizer.
 
 Use `ul` for unordered lists, `ol` for ordered lists, and `li` for their items.
 Lists can be nested inside list items:
@@ -126,13 +128,38 @@ Elements are reusable: each call creates a new element. Calling an existing
 element merges attributes and replaces its children. Text and elements may be
 mixed as consecutive children; spaces must be included in the text explicitly.
 Children are rendered when attached and attributes are copied, so later changes
-to an input list or dictionary do not change an existing element.
-This foundation does not validate HTML nesting or
-provide raw HTML or a command-line interface.
+to an input list or dictionary do not change an existing element. Elements,
+fragments, and raw markup compare equal when they render the same HTML.
+This foundation does not validate HTML nesting or provide a command-line interface.
+
+## Trusted HTML
+
+Use `Raw` for markup that must not be escaped, such as inline scripts and styles.
+Escaping would otherwise turn `<` and `&` in JavaScript into entities, which
+browsers do not decode inside `<script>`:
+
+```python
+from htmpy import Raw, head, script, style
+
+head(
+    style(Raw("body > main { margin: 0 auto }")),
+    script(Raw("if (a < b && c) { go(); }")),
+)
+```
+
+`Raw` is never validated or sanitized; pass only markup the application controls.
+Converting a `Raw`, `Fragment`, or element to `str` first makes it ordinary text
+that will be escaped again.
+
+Elements, fragments, and `Raw` implement the `__html__()` protocol shared by
+MarkupSafe, Jinja, and Django, and any child object with an `__html__()` method
+is inserted without escaping. An htmpy element can therefore be passed to an
+autoescaping Jinja template, and a `markupsafe.Markup` value can be used as a
+child, which allows migrating a template-based application page by page.
 
 ## FastAPI
 
-Pass an element or fragment directly to FastAPI's `HTMLResponse`. Both provide an
+Pass an element, fragment, or `Raw` directly to FastAPI's `HTMLResponse`. All provide an
 `encode()` method that renders escaped HTML and encodes it as UTF-8 by default.
 FastAPI is not a runtime dependency of htmpy; install it separately in your app.
 

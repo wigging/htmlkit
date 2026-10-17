@@ -1,52 +1,7 @@
 """Build HTML documents with Python objects."""
 
-from .elements import Attribute, Child, Element, Fragment
-from .tags import (
-    a,
-    aside,
-    body,
-    button,
-    div,
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6,
-    head,
-    html,
-    li,
-    link,
-    main,
-    meta,
-    ol,
-    p,
-    ul,
-)
+from . import tags
+from .elements import Attribute, Child, Element, Fragment, Raw, SupportsHtml
+from .tags import *
 
-__all__ = [
-    "Attribute",
-    "Child",
-    "Element",
-    "Fragment",
-    "a",
-    "aside",
-    "body",
-    "button",
-    "div",
-    "h1",
-    "h2",
-    "h3",
-    "h4",
-    "h5",
-    "h6",
-    "head",
-    "html",
-    "li",
-    "link",
-    "main",
-    "meta",
-    "ol",
-    "p",
-    "ul",
-]
+__all__ = ["Attribute", "Child", "Element", "Fragment", "Raw", "SupportsHtml"] + tags.__all__

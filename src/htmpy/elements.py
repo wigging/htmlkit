@@ -5,9 +5,16 @@ from collections.abc import Callable, Iterable, Mapping
 from enum import Enum
 from functools import lru_cache
 from html import escape
-from typing import NamedTuple, Self, overload
+from typing import NamedTuple, Protocol, Self, overload
 
-type Child = str | int | Element | Fragment | None | list[Child] | tuple[Child, ...]
+
+class SupportsHtml(Protocol):
+    """Objects that expose already escaped HTML through ``__html__()``."""
+
+    def __html__(self) -> str: ...
+
+
+type Child = str | int | SupportsHtml | None | list[Child] | tuple[Child, ...]
 type Attribute = str | int | bool | None
 
 _ATTRIBUTE_NAME = re.compile(r"[A-Za-z_:][A-Za-z0-9_.:-]*")
@@ -30,6 +37,7 @@ _VOID_TAGS = frozenset(
         "wbr",
     }
 )
+_new = object.__new__
 
 
 class _Missing(Enum):
@@ -43,25 +51,78 @@ def _valid_attribute_name(name: str) -> bool:
 
 def _render_child(child: Child | Mapping[str, Attribute]) -> str:
     if type(child) is Element:
-        return child[1]
+        return child._html
     if type(child) is str:
         return escape(child, quote=False)
     if child is None:
         return ""
-    if isinstance(child, (Element, Fragment)):
+    if type(child) is int:
         return str(child)
+    if isinstance(child, _Markup):
+        return child._html
+    html = getattr(child, "__html__", None)
+    if html is not None:
+        return str(html())
     if isinstance(child, (str, int)):
         return escape(str(child), quote=False)
     if isinstance(child, (list, tuple)):
         return "".join(
-            [item[1] if type(item) is Element else _render_child(item) for item in child]
+            [item._html if type(item) is Element else _render_child(item) for item in child]
         )
     if isinstance(child, Mapping):
         raise TypeError("Attributes must be the first argument, not a child")
     raise TypeError(f"Unsupported HTML child: {type(child).__name__}")
 
 
-class Fragment(tuple[str]):
+class _Markup:
+    """Base for immutable objects that hold already rendered HTML."""
+
+    __slots__ = ("_html",)
+    _html: str
+
+    def __str__(self) -> str:
+        return self._html
+
+    def __html__(self) -> str:
+        return self._html
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self._html!r})"
+
+    def __eq__(self, other: object) -> bool:
+        if type(other) is not type(self):
+            return NotImplemented
+        return other._html == self._html
+
+    def __hash__(self) -> int:
+        return hash((type(self), self._html))
+
+    def encode(self, encoding: str = "utf-8", errors: str = "strict") -> bytes:
+        """Encode rendered HTML, using UTF-8 by default."""
+        return self._html.encode(encoding, errors)
+
+
+class Raw(_Markup):
+    """Trusted HTML inserted without escaping.
+
+    Use only for markup the application controls, such as inline scripts and
+    styles. The content is never validated or sanitized.
+    """
+
+    __slots__ = ()
+
+    def __new__(cls, html: str, /) -> Self:
+        if not isinstance(html, str):
+            raise TypeError("Raw HTML must be a string")
+        raw = _new(cls)
+        raw._html = html
+        return raw
+
+    def __reduce__(self) -> tuple[type[Self], tuple[str]]:
+        return type(self), (self._html,)
+
+
+class Fragment(_Markup):
     """An immutable group of escaped children without a wrapping tag."""
 
     __slots__ = ()
@@ -77,17 +138,12 @@ class Fragment(tuple[str]):
     @classmethod
     def _from_rendered(cls, rendered: str) -> Self:
         """Construct from already escaped HTML."""
-        return tuple.__new__(cls, (rendered,))
+        fragment = _new(cls)
+        fragment._html = rendered
+        return fragment
 
-    def __str__(self) -> str:
-        return self[0]
-
-    def encode(self, encoding: str = "utf-8", errors: str = "strict") -> bytes:
-        """Encode rendered HTML, using UTF-8 by default."""
-        return str(self).encode(encoding, errors)
-
-    def __reduce__(self) -> tuple[Callable[..., Self], tuple[str]]:
-        return type(self)._from_rendered, (str(self),)
+    def __reduce__(self) -> tuple[Callable[[str], Self], tuple[str]]:
+        return type(self)._from_rendered, (self._html,)
 
 
 class _Tag(NamedTuple):
@@ -97,11 +153,30 @@ class _Tag(NamedTuple):
     closing: str
 
 
-class Element(tuple[_Tag, str]):
+@lru_cache(maxsize=256)
+def _definition(tag: str) -> _Tag:
+    """Validate a tag name and build its attribute-free definition."""
+    if not _TAG_NAME.fullmatch(tag):
+        raise ValueError(f"Invalid HTML tag name: {tag!r}")
+    doctype = "<!doctype html>" if tag == "html" else ""
+    closing = "" if tag in _VOID_TAGS else f"</{tag}>"
+    return _Tag(tag, (), f"{doctype}<{tag}>", closing)
+
+
+def _element[E: Element](cls: type[E], tag: _Tag, html: str) -> E:
+    """Construct an element from its definition and fully rendered HTML."""
+    element = _new(cls)
+    element._tag = tag
+    element._html = html
+    return element
+
+
+class Element(_Markup):
     """An immutable HTML element built from a tag, leading mapping, and children."""
 
     # Share the tag definition between calls; store fully rendered HTML per element.
-    __slots__ = ()
+    __slots__ = ("_tag",)
+    _tag: _Tag
 
     @overload
     def __new__(cls, tag: str, /, *children: Child) -> Self: ...
@@ -120,9 +195,8 @@ class Element(tuple[_Tag, str]):
     ) -> Self:
         if not isinstance(tag, str):
             raise TypeError("HTML tag name must be a string")
-        if not _TAG_NAME.fullmatch(tag):
-            raise ValueError(f"Invalid HTML tag name: {tag!r}")
-        element: Self = cls._from_content(tag)
+        definition = _definition(tag)
+        element = _element(cls, definition, f"{definition.opening}{definition.closing}")
         if first is _Missing.CHILD:
             return element
         return element.__call__(first, *children)
@@ -147,7 +221,7 @@ class Element(tuple[_Tag, str]):
                 attributes.append(f' {name}="{escape(str(value), quote=True)}"')
         opening = f"{doctype}<{_tag}{''.join(attributes)}>"
         rendered = f"{opening}{_content}{ending}" if ending else opening
-        return tuple.__new__(cls, (_Tag(_tag, _attributes, opening, ending), rendered))
+        return _element(cls, _Tag(_tag, _attributes, opening, ending), rendered)
 
     @overload
     def __call__(self, /, *children: Child) -> Self: ...
@@ -162,15 +236,16 @@ class Element(tuple[_Tag, str]):
         *children: Child,
     ) -> Self:
         """Set children, optionally merging attributes from a leading dictionary."""
-        definition = self[0]
+        definition = self._tag
         if type(first) is str and not children and definition.closing:
             content = escape(first, quote=False)
             rendered = f"{definition.opening}{content}{definition.closing}"
-            return tuple.__new__(type(self), (definition, rendered))
+            return _element(type(self), definition, rendered)
         arguments: tuple[Child | Mapping[str, Attribute], ...] = children
         if first is not _Missing.CHILD:
             arguments = (first, *children)
         attributes = definition.attributes
+        # Skip the slow Mapping ABC check for the common string and element first arguments.
         if arguments and (
             isinstance(arguments[0], dict)
             or (type(arguments[0]) not in (str, Element) and isinstance(arguments[0], Mapping))
@@ -207,12 +282,12 @@ class Element(tuple[_Tag, str]):
                 if definition.closing
                 else definition.opening
             )
-            return tuple.__new__(type(self), (definition, rendered))
+            return _element(type(self), definition, rendered)
         return type(self)._from_content(definition.name, attributes, content)
 
     def repeat(self, items: Iterable[Child], /) -> Fragment:
         """Render one element per item, reusing attributes and replacing children."""
-        definition = self[0]
+        definition = self._tag
         if not definition.closing:
             raise ValueError(f"The {definition.name} element cannot have children")
         opening, closing = definition.opening, definition.closing
@@ -222,20 +297,7 @@ class Element(tuple[_Tag, str]):
             parts.extend((opening, content, closing))
         return Fragment._from_rendered("".join(parts))
 
-    def encode(self, encoding: str = "utf-8", errors: str = "strict") -> bytes:
-        """Encode rendered HTML for consumers such as FastAPI's HTMLResponse."""
-        return str(self).encode(encoding, errors)
-
-    def __str__(self) -> str:
-        return self[1]
-
     def __reduce__(
         self,
-    ) -> tuple[Callable[..., Self], tuple[str, tuple[tuple[str, Attribute], ...], str]]:
-        definition = self[0]
-        content = (
-            self[1][len(definition.opening) : -len(definition.closing)]
-            if definition.closing
-            else ""
-        )
-        return type(self)._from_content, (definition.name, definition.attributes, content)
+    ) -> tuple[Callable[[type[Self], _Tag, str], Self], tuple[type[Self], _Tag, str]]:
+        return _element, (type(self), self._tag, self._html)

@@ -1,6 +1,6 @@
 """Build a basic HTML web page."""
 
-from htmpy import Element, body, h1, head, html, p
+from htmpy import Element, body, h1, head, html, p, title
 
 
 def basic_page() -> Element:
@@ -8,7 +8,7 @@ def basic_page() -> Element:
 
     page = html(
         {"lang": "en"},
-        head(),
+        head(title("Hello there!")),
         body(
             h1("Hello there!"),
             p(
