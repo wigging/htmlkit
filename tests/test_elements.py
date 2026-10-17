@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from htmpy import (
     Child,
     Element,
+    Fragment,
     a,
     aside,
     body,
@@ -86,8 +87,11 @@ def test_constructor_void(tag):
         assert str(cloned) == str(element)
 
 
-def test_html_response():
+@pytest.mark.parametrize("as_fragment", [False, True])
+def test_html_response(as_fragment):
     page = html(body(p({"title": '"café"'}, "雪 & <hello>")))
+    if as_fragment:
+        page = Fragment(page)
     response = HTMLResponse(page, status_code=201)
     expected = (
         '<!doctype html><html><body><p title="&quot;café&quot;">'
@@ -99,8 +103,8 @@ def test_html_response():
     assert response.headers["content-length"] == str(len(expected))
 
 
-def test_encode():
-    element = p("café")
+@pytest.mark.parametrize("element", [p("café"), Fragment(p("café"))])
+def test_encode(element):
     assert element.encode() == b"<p>caf\xc3\xa9</p>"
     assert element.encode("latin-1") == b"<p>caf\xe9</p>"
     assert element.encode("ascii", errors="xmlcharrefreplace") == b"<p>caf&#233;</p>"
@@ -272,11 +276,38 @@ def test_attribute_snapshot():
     assert str(element) == '<body class="intro">Before <p>inside</p> after.</body>'
 
 
+def test_fragment():
+    children: list[Child] = ["<unsafe> & ", p("雪"), (None, 0, ["café"])]
+    generated = (child for child in children)
+    fragment = Fragment.from_iterable(generated)
+    assert list(generated) == []
+    children.clear()
+    expected = "&lt;unsafe&gt; &amp; <p>雪</p>0café"
+    assert str(fragment) == expected
+    assert str(Fragment("<unsafe> & ", p("雪"), (None, 0, ["café"]))) == expected
+    assert str(Fragment()) == str(Fragment.from_iterable([])) == ""
+    assert str(body(Fragment(fragment, "!"))) == f"<body>{expected}!</body>"
+    assert str(Fragment("<em>raw</em>")) == "&lt;em&gt;raw&lt;/em&gt;"
+    assert str(Fragment(str(p("<&")))) == "&lt;p&gt;&amp;lt;&amp;amp;&lt;/p&gt;"
+    for cloned in (copy(fragment), deepcopy(fragment), loads(dumps(fragment))):
+        assert isinstance(cloned, Fragment)
+        assert str(body(cloned)) == f"<body>{expected}</body>"
+
+
+@pytest.mark.parametrize("child", [{"id": "not-attributes"}, object()])
+def test_fragment_rejects_invalid_children(child):
+    with pytest.raises(TypeError):
+        Fragment(child)
+    with pytest.raises(TypeError):
+        Fragment.from_iterable([child])
+
+
 def test_repeat():
     row = li({"class": 'a&"b'}, "replaced")
     nested: list[Child] = ["雪 & ", p("<inside>")]
     items: list[Child] = ["<one> \"' &", 0, None, nested]
     fragment = row.repeat(item for item in items)
+    assert isinstance(fragment, Fragment)
     items.clear()
     nested.clear()
     expected = (

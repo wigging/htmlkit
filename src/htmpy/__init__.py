@@ -1,6 +1,6 @@
 """Build HTML documents with Python objects."""
 
-from .elements import Attribute, Child, Element
+from .elements import Attribute, Child, Element, Fragment
 from .tags import (
     a,
     aside,
@@ -28,6 +28,7 @@ __all__ = [
     "Attribute",
     "Child",
     "Element",
+    "Fragment",
     "a",
     "aside",
     "body",

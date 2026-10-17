@@ -7,7 +7,7 @@ from functools import lru_cache
 from html import escape
 from typing import NamedTuple, Self, overload
 
-type Child = str | int | Element | _Fragment | None | list[Child] | tuple[Child, ...]
+type Child = str | int | Element | Fragment | None | list[Child] | tuple[Child, ...]
 type Attribute = str | int | bool | None
 
 _ATTRIBUTE_NAME = re.compile(r"[A-Za-z_:][A-Za-z0-9_.:-]*")
@@ -48,7 +48,7 @@ def _render_child(child: Child | Mapping[str, Attribute]) -> str:
         return escape(child, quote=False)
     if child is None:
         return ""
-    if isinstance(child, (Element, _Fragment)):
+    if isinstance(child, (Element, Fragment)):
         return str(child)
     if isinstance(child, (str, int)):
         return escape(str(child), quote=False)
@@ -61,13 +61,33 @@ def _render_child(child: Child | Mapping[str, Attribute]) -> str:
     raise TypeError(f"Unsupported HTML child: {type(child).__name__}")
 
 
-class _Fragment(NamedTuple):
-    """Already escaped HTML produced by repeating an element."""
+class Fragment(tuple[str]):
+    """An immutable group of escaped children without a wrapping tag."""
 
-    rendered: str
+    __slots__ = ()
+
+    def __new__(cls, *children: Child) -> Self:
+        return cls.from_iterable(children)
+
+    @classmethod
+    def from_iterable(cls, children: Iterable[Child], /) -> Self:
+        """Immediately consume children and snapshot their escaped HTML."""
+        return cls._from_rendered("".join([_render_child(child) for child in children]))
+
+    @classmethod
+    def _from_rendered(cls, rendered: str) -> Self:
+        """Construct from already escaped HTML."""
+        return tuple.__new__(cls, (rendered,))
 
     def __str__(self) -> str:
-        return self.rendered
+        return self[0]
+
+    def encode(self, encoding: str = "utf-8", errors: str = "strict") -> bytes:
+        """Encode rendered HTML, using UTF-8 by default."""
+        return str(self).encode(encoding, errors)
+
+    def __reduce__(self) -> tuple[Callable[..., Self], tuple[str]]:
+        return type(self)._from_rendered, (str(self),)
 
 
 class _Tag(NamedTuple):
@@ -190,7 +210,7 @@ class Element(tuple[_Tag, str]):
             return tuple.__new__(type(self), (definition, rendered))
         return type(self)._from_content(definition.name, attributes, content)
 
-    def repeat(self, items: Iterable[Child], /) -> _Fragment:
+    def repeat(self, items: Iterable[Child], /) -> Fragment:
         """Render one element per item, reusing attributes and replacing children."""
         definition = self[0]
         if not definition.closing:
@@ -200,7 +220,7 @@ class Element(tuple[_Tag, str]):
         for item in items:
             content = escape(item, quote=False) if type(item) is str else _render_child(item)
             parts.extend((opening, content, closing))
-        return _Fragment("".join(parts))
+        return Fragment._from_rendered("".join(parts))
 
     def encode(self, encoding: str = "utf-8", errors: str = "strict") -> bytes:
         """Encode rendered HTML for consumers such as FastAPI's HTMLResponse."""

@@ -55,3 +55,34 @@ larger workload practical. Results are in microseconds per complete list, not
 per item. There is no separate htmpy reused path because the bare `ul` and `li`
 elements already serve as reusable templates; no static subtrees or attribute
 dictionaries need preparation.
+
+## Fragment benchmark
+
+```sh
+uv run benchmarks/fragments.py
+```
+
+Compares `Fragment(*children)`, `Fragment.from_iterable(children)`, and compiled,
+autoescaped Jinja templates for two workloads without a wrapping element:
+
+- A small fragment with a heading, separator text, and paragraph.
+- A fragment containing 1,000 generated paragraphs.
+
+The small iterable case uses a tuple. The two large constructor cases generate fresh `p`
+elements: `Fragment` expands a generator into positional arguments, while
+`from_iterable` consumes a generator directly. Element construction, escaping,
+and rendering the final string are included in the timings. No rendered children
+are cached. Input strings and Jinja templates are prepared outside the timings.
+This measures complete rendering paths, not isolated fragment-wrapper overhead.
+
+The large workload also includes `p.repeat(ITEMS)`, which returns a fragment
+without allocating an element for each paragraph. It reuses the paragraph's
+opening and closing tags while still escaping every input string. The mixed-tag
+small workload has no equivalent single-tag `repeat()` case.
+
+Before timing, all outputs for each workload must equal independently
+constructed expected HTML, including escaped ampersands and angle brackets.
+The script reports median microseconds per complete fragment across five repeats
+of 10,000 small fragments or 1,000 large fragments. As with the other benchmarks,
+`timeit` disables garbage collection, and results depend on the machine and Python
+version. These are eager renders, not streaming or peak-memory measurements.

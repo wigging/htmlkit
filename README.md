@@ -61,8 +61,8 @@ row = li({"class": "result"})
 items = ul(row.repeat(name for name in ["Alice", "Bob"]))
 ```
 
-`repeat()` immediately consumes an iterable and returns an immutable HTML
-fragment that can be passed as a child or rendered with `str()`. Each item becomes
+`repeat()` immediately consumes an iterable and returns an immutable `Fragment`
+that can be passed as a child or rendered with `str()`. Each item becomes
 one element, reusing the receiver's attributes and replacing its original children.
 Items may be text, integers, elements, fragments, `None`, or nested lists and
 tuples of children. `None` creates an empty element; an empty iterable creates an
@@ -71,6 +71,22 @@ the fragment. Dictionaries are not supported as items; configure shared attribut
 on the receiver instead. Void elements (`meta` and `link`) reject `repeat()`, even
 for an empty iterable. Pass fragments directly as children: converting one to
 `str` first makes it ordinary text, which will be escaped again.
+
+Use `Fragment` to group children without adding a wrapping tag:
+
+```python
+from htmpy import Fragment, h1, p
+
+content = Fragment(h1("Welcome"), p("A & B"))
+paragraphs = Fragment.from_iterable(p(name) for name in ["Alice", "Bob"])
+```
+
+`Fragment(*children)` accepts the same children as elements, but no attribute
+mapping. Strings are escaped, not treated as raw HTML. `from_iterable()` consumes
+its input immediately; later input mutations do not change the fragment.
+Generators are accepted through `from_iterable()`, not as ordinary children.
+Both forms support empty input. Fragments support `str()` and `encode()` just
+like elements, and can be nested inside elements or other fragments.
 
 Use `meta` and `link` inside `head` for metadata and linked resources:
 
@@ -116,7 +132,7 @@ provide raw HTML or a command-line interface.
 
 ## FastAPI
 
-Pass an element directly to FastAPI's `HTMLResponse`. Elements provide an
+Pass an element or fragment directly to FastAPI's `HTMLResponse`. Both provide an
 `encode()` method that renders escaped HTML and encodes it as UTF-8 by default.
 FastAPI is not a runtime dependency of htmpy; install it separately in your app.
 
