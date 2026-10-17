@@ -11,7 +11,9 @@ from typing import NamedTuple, Protocol, Self, overload
 class SupportsHtml(Protocol):
     """Objects that expose already escaped HTML through ``__html__()``."""
 
-    def __html__(self) -> str: ...
+    def __html__(self) -> str:
+        """Return HTML that can be inserted without further escaping."""
+        ...
 
 
 type Child = str | int | SupportsHtml | None | list[Child] | tuple[Child, ...]
@@ -112,6 +114,7 @@ class Raw(_Markup):
     __slots__ = ()
 
     def __new__(cls, html: str, /) -> Self:
+        """Wrap a trusted string without validating or escaping its content."""
         if not isinstance(html, str):
             raise TypeError("Raw HTML must be a string")
         raw = _new(cls)
@@ -119,6 +122,7 @@ class Raw(_Markup):
         return raw
 
     def __reduce__(self) -> tuple[type[Self], tuple[str]]:
+        """Return reconstruction data preserving the trusted HTML."""
         return type(self), (self._html,)
 
 
@@ -128,6 +132,7 @@ class Fragment(_Markup):
     __slots__ = ()
 
     def __new__(cls, *children: Child) -> Self:
+        """Snapshot children as escaped HTML without a wrapping tag."""
         return cls.from_iterable(children)
 
     @classmethod
@@ -143,6 +148,7 @@ class Fragment(_Markup):
         return fragment
 
     def __reduce__(self) -> tuple[Callable[[str], Self], tuple[str]]:
+        """Return reconstruction data that avoids escaping the fragment again."""
         return type(self)._from_rendered, (self._html,)
 
 
@@ -193,6 +199,7 @@ class Element(_Markup):
         /,
         *children: Child,
     ) -> Self:
+        """Build an element from a tag, optional leading attributes, and children."""
         if not isinstance(tag, str):
             raise TypeError("HTML tag name must be a string")
         definition = _definition(tag)
@@ -300,4 +307,5 @@ class Element(_Markup):
     def __reduce__(
         self,
     ) -> tuple[Callable[[type[Self], _Tag, str], Self], tuple[type[Self], _Tag, str]]:
+        """Return reconstruction data preserving the tag and rendered HTML."""
         return _element, (type(self), self._tag, self._html)

@@ -17,34 +17,42 @@ REPEAT = 5
 
 
 def render_small_fragment() -> str:
+    """Render mixed content using positional fragment children."""
     return str(Fragment(h1(CONTEXT["heading"]), " — ", p(CONTEXT["message"])))
 
 
 def render_small_iterable() -> str:
+    """Render mixed content using an iterable of fragment children."""
     return str(Fragment.from_iterable((h1(CONTEXT["heading"]), " — ", p(CONTEXT["message"]))))
 
 
 def render_small_jinja() -> str:
+    """Render mixed content using the compiled Jinja template."""
     return SMALL_TEMPLATE.render(CONTEXT)
 
 
 def render_large_fragment() -> str:
+    """Render paragraphs using positional fragment children."""
     return str(Fragment(*(p(item) for item in ITEMS)))
 
 
 def render_large_iterable() -> str:
+    """Render paragraphs from a generator of fragment children."""
     return str(Fragment.from_iterable(p(item) for item in ITEMS))
 
 
 def render_large_repeat() -> str:
+    """Render paragraphs by repeating the paragraph element."""
     return str(p.repeat(ITEMS))
 
 
 def render_large_jinja() -> str:
+    """Render paragraphs using the compiled Jinja template."""
     return LARGE_TEMPLATE.render(items=ITEMS)
 
 
 def main() -> None:
+    """Validate fragment output and report median rendering times."""
     small_expected = "<h1>Hello &amp; welcome</h1> — <p>Build a &lt;fragment&gt; with café.</p>"
     large_expected = "".join(
         f"<p>Paragraph {index} &amp; &lt;content&gt;</p>" for index in range(ITEM_COUNT)

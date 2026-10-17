@@ -17,18 +17,22 @@ REPEAT = 5
 
 
 def render_htmpy() -> str:
+    """Render an unordered list with individually constructed list items."""
     return str(ul([li(item) for item in CONTEXT["items"]]))
 
 
 def render_htmpy_repeat() -> str:
+    """Render an unordered list by repeating the list item element."""
     return str(ul(li.repeat(CONTEXT["items"])))
 
 
 def render_jinja() -> str:
+    """Render an unordered list using the compiled Jinja template."""
     return TEMPLATE.render(CONTEXT)
 
 
 def main() -> None:
+    """Validate list output and report median rendering times."""
     expected = (
         "<ul>"
         + "".join(f"<li>Item {index} &amp; &lt;content&gt;</li>" for index in range(ITEM_COUNT))

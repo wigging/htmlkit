@@ -1,3 +1,5 @@
+"""Check HTML tag exports, names, and rendering behavior."""
+
 import keyword
 
 import pytest
@@ -24,6 +26,7 @@ VOID = {
 
 @pytest.mark.parametrize("name", tags.__all__)
 def test_tag_renders_its_html_name(name):
+    """Verify each exported tag renders its HTML name and accepts attributes."""
     element = getattr(tags, name)
     tag = name.rstrip("_")
     assert isinstance(element, Element)
@@ -40,6 +43,7 @@ def test_tag_renders_its_html_name(name):
 
 
 def test_tag_module_covers_the_living_standard():
+    """Verify tag coverage, unique exports, and Python-safe names."""
     assert len(tags.__all__) == 113
     assert len(set(tags.__all__)) == len(tags.__all__)
     assert tags.del_ is not None and "del" not in tags.__all__
@@ -51,6 +55,7 @@ def test_tag_module_covers_the_living_standard():
 
 
 def test_html_shortcut_for_custom_tags_is_consistent():
+    """Verify direct construction matches shortcuts and validates custom tags."""
     assert str(Element("section", "x")) == str(tags.section("x")) == "<section>x</section>"
     assert str(Element("my-widget", "x")) == "<my-widget>x</my-widget>"
     with pytest.raises(ValueError, match="Invalid HTML tag name"):

@@ -5,7 +5,6 @@ from htmpy import Element, body, h1, head, html, p, title
 
 def basic_page() -> Element:
     """Create a basic HTML web page."""
-
     page = html(
         {"lang": "en"},
         head(title("Hello there!")),

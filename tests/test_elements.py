@@ -1,3 +1,5 @@
+"""Check element construction, escaping, composition, and interoperability."""
+
 from copy import copy, deepcopy
 from pickle import dumps, loads
 from types import MappingProxyType
@@ -37,6 +39,7 @@ from htmpy import (
 
 
 def test_public_construction():
+    """Verify direct construction snapshots inputs and supports reuse and copying."""
     attributes = {"title": '"<&'}
     children: list[Child] = ["<unsafe>&", p("<nested>")]
     element = Element("section", MappingProxyType(attributes), children)
@@ -60,6 +63,7 @@ def test_public_construction():
 
 @pytest.mark.parametrize("tag", ["", "P", "p onclick=x", "p><script", "p/", "p\n"])
 def test_invalid_tag(tag):
+    """Reject empty, uppercase, and unsafe tag names."""
     with pytest.raises(ValueError, match="Invalid HTML tag name"):
         Element(tag)
 
@@ -69,11 +73,13 @@ def test_invalid_tag(tag):
     [({'x="injected"': "value"}, ValueError), ({"title": []}, TypeError)],
 )
 def test_constructor_attributes(attributes, error):
+    """Reject invalid attribute names and unsupported values."""
     with pytest.raises(error):
         Element("p", attributes, "text")
 
 
 def test_constructor_rejects_raw_keywords():
+    """Reject internal constructor keywords and attributes after children."""
     with pytest.raises(TypeError):
         Element(_tag="p", _attributes=(), _content="<script>")  # ty: ignore[no-matching-overload]
     with pytest.raises(TypeError):
@@ -82,6 +88,7 @@ def test_constructor_rejects_raw_keywords():
 
 @pytest.mark.parametrize("tag", ["meta", "link", "img", "br"])
 def test_constructor_void(tag):
+    """Verify directly constructed void elements reject children and survive copying."""
     element = Element(tag, {"id": "example"})
     assert str(element) == f'<{tag} id="example">'
     for child in ("text", "", None, []):
@@ -93,6 +100,7 @@ def test_constructor_void(tag):
 
 @pytest.mark.parametrize("as_fragment", [False, True])
 def test_html_response(as_fragment):
+    """Verify FastAPI responses encode elements and fragments with correct headers."""
     page = html(body(p({"title": '"café"'}, "雪 & <hello>")))
     if as_fragment:
         page = Fragment(page)
@@ -109,6 +117,7 @@ def test_html_response(as_fragment):
 
 @pytest.mark.parametrize("element", [p("café"), Fragment(p("café"))])
 def test_encode(element):
+    """Verify encoding choices and error handling for rendered HTML."""
     assert element.encode() == b"<p>caf\xc3\xa9</p>"
     assert element.encode("latin-1") == b"<p>caf\xe9</p>"
     assert element.encode("ascii", errors="xmlcharrefreplace") == b"<p>caf&#233;</p>"
@@ -117,6 +126,7 @@ def test_encode(element):
 
 
 def test_document():
+    """Verify HTML documents include a doctype and nested content."""
     page = html({"lang": "en"}, head(), body(h1("Hello"), p("First"), p("Second")))
     assert str(page) == (
         '<!doctype html><html lang="en"><head></head><body>'
@@ -126,6 +136,7 @@ def test_document():
 
 
 def test_head_metadata():
+    """Verify head metadata renders void tags and escapes attribute values."""
     page = html(
         head(
             meta({"charset": "utf-8"}),
@@ -144,6 +155,7 @@ def test_head_metadata():
 
 @pytest.mark.parametrize("element, tag", [(meta, "meta"), (link, "link")])
 def test_void_elements(element, tag):
+    """Verify void shortcuts support attribute updates but reject all children."""
     assert str(element) == f"<{tag}>"
     assert str(element()) == f"<{tag}>"
     base = element({"id": "original"})
@@ -164,6 +176,7 @@ def test_void_elements(element, tag):
     [(p, {"cls": "intro"}), (p, {"content": "Hello"}), (meta, {"charset": "utf-8"})],
 )
 def test_keyword_arguments_rejected(element, attrs):
+    """Reject keyword arguments in element calls."""
     with pytest.raises(TypeError):
         element(**attrs)
 
@@ -173,6 +186,7 @@ def test_keyword_arguments_rejected(element, attrs):
     [(head, "head"), (body, "body"), (h1, "h1"), (p, "p"), (ul, "ul"), (ol, "ol"), (li, "li")],
 )
 def test_empty(element, tag):
+    """Verify empty non-void elements include closing tags."""
     assert str(element()) == f"<{tag}></{tag}>"
 
 
@@ -181,6 +195,7 @@ def test_empty(element, tag):
     [(h1, "h1"), (h2, "h2"), (h3, "h3"), (h4, "h4"), (h5, "h5"), (h6, "h6")],
 )
 def test_headings(element, tag):
+    """Verify every heading level supports escaped content and attributes."""
     assert str(element()) == f"<{tag}></{tag}>"
     assert str(element("Section & <title>")) == f"<{tag}>Section &amp; &lt;title&gt;</{tag}>"
     assert str(element({"id": "section"}, "Section ", 2)) == (
@@ -199,6 +214,7 @@ def test_headings(element, tag):
     ],
 )
 def test_controls_and_containers(element, tag, attrs, rendered_attrs):
+    """Verify controls and containers render attributes and nested child sequences."""
     assert str(element()) == f"<{tag}></{tag}>"
     assert str(element(attrs, "A & <B>", [" details ", 2])) == (
         f"<{tag}{rendered_attrs}>A &amp; &lt;B&gt; details 2</{tag}>"
@@ -206,6 +222,7 @@ def test_controls_and_containers(element, tag, attrs, rendered_attrs):
 
 
 def test_lists():
+    """Verify nested ordered and unordered lists preserve structure and attributes."""
     element = ul(
         {"class": "items"},
         [li("A & B"), li("Steps", ol({"start": 3}, li("First"), li({"value": 7}, "Last")))],
@@ -217,6 +234,7 @@ def test_lists():
 
 
 def test_escaping():
+    """Verify text and attribute escaping without double-escaping nested elements."""
     assert str(p("雪 & <tag> \"'")) == "<p>雪 &amp; &lt;tag&gt; \"'</p>"
     child = li("<one> & two")
     assert str(ul([child, str(child)])) == (
@@ -231,6 +249,7 @@ def test_escaping():
 
 
 def test_attributes():
+    """Verify literal attribute names and string, integer, boolean, and null values."""
     assert (
         str(p({"class": "intro", "data-id": 7, "hidden": True, "title": None, "inert": False}))
         == '<p class="intro" data-id="7" hidden></p>'
@@ -241,6 +260,7 @@ def test_attributes():
 
 
 def test_attribute_order():
+    """Reject attribute mappings outside the first argument position."""
     with pytest.raises(TypeError):
         p("Hello", {"class": "intro"})  # ty: ignore[no-matching-overload]
     with pytest.raises(TypeError):
@@ -248,6 +268,7 @@ def test_attribute_order():
 
 
 def test_reuse():
+    """Verify element calls replace children and merge attributes without mutation."""
     base = p({"class": "note"}, "Original")
     changed = base({"class": "new", "id": "message"}, "Changed")
     assert str(base) == '<p class="note">Original</p>'
@@ -260,12 +281,14 @@ def test_reuse():
 
 @pytest.mark.parametrize("element", [p({"class": "note"}, "A & <B>"), meta({"charset": "utf-8"})])
 def test_element_copy(element):
+    """Verify copying and pickling preserve rendering and attribute updates."""
     for cloned in (copy(element), deepcopy(element), loads(dumps(element))):
         assert str(cloned) == str(element)
         assert str(cloned({"id": "updated"})) == str(element({"id": "updated"}))
 
 
 def test_child_snapshot():
+    """Verify later changes to child lists do not alter rendered elements."""
     children: list[Child] = [p("First"), (None, " & ", 0)]
     element = body(children)
     children.clear()
@@ -274,6 +297,7 @@ def test_child_snapshot():
 
 
 def test_attribute_snapshot():
+    """Verify later changes to attribute mappings do not alter rendered elements."""
     attributes = {"class": "intro"}
     element = body(attributes, "Before ", p("inside"), " after.")
     attributes["class"] = "changed"
@@ -281,6 +305,7 @@ def test_attribute_snapshot():
 
 
 def test_fragment():
+    """Verify fragments snapshot, escape, nest, and copy children without a wrapper."""
     children: list[Child] = ["<unsafe> & ", p("雪"), (None, 0, ["café"])]
     generated = (child for child in children)
     fragment = Fragment.from_iterable(generated)
@@ -300,6 +325,7 @@ def test_fragment():
 
 @pytest.mark.parametrize("child", [{"id": "not-attributes"}, object()])
 def test_fragment_rejects_invalid_children(child):
+    """Reject mappings and unsupported objects as fragment children."""
     with pytest.raises(TypeError):
         Fragment(child)
     with pytest.raises(TypeError):
@@ -307,6 +333,7 @@ def test_fragment_rejects_invalid_children(child):
 
 
 def test_repeat():
+    """Verify repeated elements snapshot content and retain the base attributes."""
     row = li({"class": 'a&"b'}, "replaced")
     nested: list[Child] = ["雪 & ", p("<inside>")]
     items: list[Child] = ["<one> \"' &", 0, None, nested]
@@ -337,11 +364,13 @@ def test_repeat():
 
 @pytest.mark.parametrize("items", [[{"id": "not-an-attribute-update"}], [object()]])
 def test_repeat_rejects_invalid_content(items):
+    """Reject mappings and unsupported objects as repeated content."""
     with pytest.raises(TypeError):
         li.repeat(items)
 
 
 def test_repeat_rejects_void_elements():
+    """Reject repeating void elements even with an empty iterable."""
     for element in (meta, link):
         for items in ([], [None], ["text"]):
             with pytest.raises(ValueError, match="cannot have children"):
@@ -349,6 +378,7 @@ def test_repeat_rejects_void_elements():
 
 
 def test_raw():
+    """Verify trusted strings bypass escaping and retain that behavior when copied."""
     code = 'if (a < b && c) { go("<x>"); }'
     assert str(script(Raw(code))) == f"<script>{code}</script>"
     assert str(Raw("<em>raw</em>")) == "<em>raw</em>"
@@ -365,6 +395,8 @@ def test_raw():
 
 
 def test_html_protocol():
+    """Verify HTML protocol interoperability with custom objects, Markup, and Jinja."""
+
     class Widget:
         def __html__(self) -> str:
             return "<widget>&</widget>"
@@ -381,6 +413,7 @@ def test_html_protocol():
 
 
 def test_equality():
+    """Verify equality and hashing distinguish markup types and rendered content."""
     assert p({"id": "x"}, "A") == p({"id": "x"}, "A") == Element("p", {"id": "x"}, "A")
     assert p("A") != p("B") and p("A") != Element("div", "A")
     assert Fragment(p("A")) == Fragment(p("A")) != p("A")

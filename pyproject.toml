@@ -23,5 +23,11 @@ dev = [
 [tool.ruff]
 line-length = 100
 
+[tool.ruff.lint]
+extend-select = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
 [tool.uv]
 python-preference = "only-managed"

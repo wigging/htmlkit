@@ -24,6 +24,7 @@ REPEAT = 5
 
 
 def render_htmpy_fresh() -> str:
+    """Render a page by constructing every htmpy element anew."""
     return str(
         html(
             {"lang": "en"},
@@ -37,14 +38,17 @@ def render_htmpy_fresh() -> str:
 
 
 def render_htmpy() -> str:
+    """Render a page while reusing prepared htmpy elements."""
     return str(PAGE(HEAD, body(h1(CONTEXT["heading"]), PARAGRAPH(CONTEXT["message"]))))
 
 
 def render_jinja() -> str:
+    """Render a page using the compiled Jinja template."""
     return TEMPLATE.render(CONTEXT)
 
 
 def main() -> None:
+    """Validate page output and report median rendering times."""
     expected = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<link rel="stylesheet" href="/styles.css"></head><body>'
