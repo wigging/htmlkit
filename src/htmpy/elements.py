@@ -5,7 +5,7 @@ from collections.abc import Callable, Iterable, Mapping
 from enum import Enum
 from functools import lru_cache
 from html import escape
-from typing import NamedTuple, Protocol, Self, overload
+from typing import Protocol, Self, overload
 
 
 class SupportsHtml(Protocol):
@@ -152,11 +152,23 @@ class Fragment(_Markup):
         return type(self)._from_rendered, (self._html,)
 
 
-class _Tag(NamedTuple):
-    name: str
-    attributes: tuple[tuple[str, Attribute], ...]
-    opening: str
-    closing: str
+class _Tag:
+    """A validated tag name with its attributes and rendered opening and closing tags."""
+
+    # Slots read faster than named tuple fields on the element construction path.
+    __slots__ = ("attributes", "closing", "name", "opening")
+
+    def __init__(
+        self,
+        name: str,
+        attributes: tuple[tuple[str, Attribute], ...],
+        opening: str,
+        closing: str,
+    ) -> None:
+        self.name = name
+        self.attributes = attributes
+        self.opening = opening
+        self.closing = closing
 
 
 @lru_cache(maxsize=256)
@@ -174,15 +186,37 @@ def _element[E: Element](cls: type[E], tag: _Tag, html: str) -> E:
     element = _new(cls)
     element._tag = tag
     element._html = html
+    element._count = 0
     return element
 
 
 class Element(_Markup):
     """An immutable HTML element built from a tag, leading mapping, and children."""
 
-    # Share the tag definition between calls; store fully rendered HTML per element.
-    __slots__ = ("_tag",)
+    # Share the tag definition between calls. Most elements store fully rendered HTML.
+    # Wrapping a single element stores the child and a run count of identical wrappers
+    # instead, so deep nesting avoids copying the child's HTML at every level; the
+    # rendered HTML is materialized by __getattr__ the first time it is read.
+    __slots__ = ("_count", "_inner", "_tag")
     _tag: _Tag
+    _inner: str | Element
+    _count: int
+
+    def __getattr__(self, name: str) -> str:
+        """Materialize and cache the rendered HTML of an element that wraps a chain."""
+        if name != "_html":
+            raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
+        openings: list[str] = []
+        closings: list[str] = []
+        node: str | Element = self
+        while not isinstance(node, str):
+            tag, count = node._tag, node._count
+            openings.append(tag.opening * count)
+            closings.append(tag.closing * count)
+            node = node._inner
+        closings.reverse()
+        html = self._html = f"{''.join(openings)}{node}{''.join(closings)}"
+        return html
 
     @overload
     def __new__(cls, tag: str, /, *children: Child) -> Self: ...
@@ -244,13 +278,23 @@ class Element(_Markup):
     ) -> Self:
         """Set children, optionally merging attributes from a leading dictionary."""
         definition = self._tag
-        if type(first) is str and not children and definition.closing:
-            content = escape(first, quote=False)
-            rendered = f"{definition.opening}{content}{definition.closing}"
-            return _element(type(self), definition, rendered)
-        if type(first) is Element and not children and definition.closing:
-            rendered = f"{definition.opening}{first._html}{definition.closing}"
-            return _element(type(self), definition, rendered)
+        if not children and definition.closing:
+            if type(first) is str:
+                content = escape(first, quote=False)
+                rendered = f"{definition.opening}{content}{definition.closing}"
+                return _element(type(self), definition, rendered)
+            if type(first) is Element:
+                # Wrap without copying: extend a run of identical wrappers, link a nested
+                # chain, or start a new run around an already rendered child.
+                element = _new(type(self))
+                element._tag = definition
+                if first._count and first._tag is definition:
+                    element._inner = first._inner
+                    element._count = first._count + 1
+                else:
+                    element._inner = first if first._count else first._html
+                    element._count = 1
+                return element
         arguments: tuple[Child | Mapping[str, Attribute], ...] = children
         if first is not _Missing.CHILD:
             arguments = (first, *children)

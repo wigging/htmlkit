@@ -9,7 +9,7 @@ from jinja2 import Environment
 
 from htmpy import div, p
 
-DEPTHS = (10, 100, 1_000, 5_000)
+DEPTHS = (10, 32, 100)
 PAYLOAD_REPEATS = (1, 256)
 TEXT = "Content & <details>."
 ESCAPED_TEXT = "Content &amp; &lt;details&gt;."

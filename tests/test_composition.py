@@ -4,7 +4,7 @@ from copy import copy, deepcopy
 
 import pytest
 
-from htmpy import Child, Fragment, body, li, link, meta, p, ul
+from htmpy import Child, Fragment, article, body, br, div, li, link, meta, p, section, span, ul
 
 
 def test_fragment():
@@ -72,6 +72,35 @@ def test_repeat():
     )
     for cloned in (copy(fragment), deepcopy(fragment)):
         assert str(ul(cloned)) == f"<ul>{expected}</ul>"
+
+
+def test_nested_wrappers():
+    """Verify single-element wrapping renders mixed tags, runs, branches, and copies."""
+    inner = div(div(p("a & <b>")))
+    expected = "<div><div><p>a &amp; &lt;b&gt;</p></div></div>"
+    boxed = div({"class": "box"})
+    chain = article(section(boxed(boxed(inner))))
+    assert str(chain) == (
+        f'<article><section><div class="box"><div class="box">{expected}</div></div>'
+        "</section></article>"
+    )
+    assert str(inner) == expected
+    # Wrapping the same child twice must not alter the child or the sibling branch.
+    first, second = div(inner), span(inner)
+    assert str(first) == f"<div>{expected}</div>"
+    assert str(second) == f"<span>{expected}</span>"
+    assert str(inner) == expected
+    assert str(body(chain, " & ", second)) == f"<body>{chain} &amp; {second}</body>"
+    assert str(div({"id": "x"}, inner)) == f'<div id="x">{expected}</div>'
+    assert str(div(br)) == "<div><br></div>"
+    assert str(inner("replaced")) == "<div>replaced</div>"
+    flat = div(div(p("a & <b>")), None)
+    assert inner == flat and hash(inner) == hash(flat)
+    assert repr(inner) == f"Element({expected!r})"
+    for cloned in (copy(chain), deepcopy(chain)):
+        assert str(cloned) == str(chain)
+    with pytest.raises(AttributeError, match="no attribute 'missing'"):
+        inner.missing  # noqa: B018
 
 
 @pytest.mark.parametrize("items", [[{"id": "not-an-attribute-update"}], [object()]])
