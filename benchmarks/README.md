@@ -120,11 +120,13 @@ inputs and expected strings are allocated before tracing starts. The reported
 peak covers traced Python allocations, not process RSS or total bytes allocated
 over the render's lifetime.
 
-When an element wraps a single child element, htmpy stores a reference to the
-child and a run count of identical wrappers instead of copying the child's
-rendered HTML, then renders the chain once when the HTML is first read. A chain
-of depth d around an escaped payload of length n therefore costs O(d + n)
-copying and live storage, rather than O(d² + d·n) copying.
+When an element wraps a single element with the same tag, or wraps such a run,
+htmpy stores a reference to the child and a run count instead of copying the
+child's rendered HTML, then renders the chain once when the HTML is first read.
+A chain of depth d around an escaped payload of length n therefore costs
+O(d + n) copying and live storage, rather than O(d² + d·n) copying. Wrapping a
+single element with a different tag, such as `li(a(...))`, copies eagerly,
+because that is cheaper than materializing a one-level chain later.
 The remaining per-level cost is one Python call and one object allocation,
 which is the floor for this API: on CPython 3.14 that is about 0.1 µs per
 level, while Jinja's compiled loop emits each wrapper in about 0.05 µs. htmpy
@@ -132,3 +134,61 @@ therefore wins at depths typical of real documents, where its fixed cost is
 lower, and trails Jinja as depth grows. Retaining all intermediate elements
 would be a different memory workload. Results depend on the machine and Python
 version.
+
+## Realistic page benchmark
+
+```sh
+uv run benchmarks/realistic_page.py
+```
+
+Builds a complete inventory page of about 12 KB: a head with charset, title,
+and stylesheet; a header with a five-link navigation list whose current link
+carries an `active` class and a heading; a main section with a 50-row, 6-column
+data table whose cells mix integers, escaped names, non-ASCII owners, a status
+class attribute, and an edit link with `&` in its URL; a form with ten
+label and input pairs using the boolean `required` attribute, a select with a
+conditionally `selected` option, a textarea, and a submit button; and a footer
+with a `time` element. The page has about 430 elements and 370 escaped values,
+so element construction dominates rather than any single long string.
+
+The **htmpy fresh** path builds every element and attribute dictionary on each
+render. The **htmpy reused** path prepares the static head, header, table head,
+footer, and attributed `html`, `table`, `td`, `form`, and `select` templates
+once, then builds the table body and form fields on each render. The **Jinja**
+path renders one compiled, autoescaped template with `for` loops and `if`
+conditions for the same context. Conditional attributes use `None` values in
+htmpy, which omit the attribute, and `{% if %}` blocks in Jinja. All three
+outputs must equal independently assembled expected HTML before timing.
+
+Results report the median time per page across five repeats of 1,000 pages,
+with input preparation, Jinja compilation, validation, and printing excluded.
+Every htmpy element costs one Python call and one allocation, so pages with
+hundreds of small elements, such as table cells, are where a compiled template
+that emits static text in bulk has its largest advantage.
+
+## Escaping benchmark
+
+```sh
+uv run benchmarks/escaping.py
+```
+
+Renders an article with a heading and 50 paragraphs of 600 characters each,
+so escaping long text dominates the work rather than element construction.
+Four text variants exercise the different escaping paths: ASCII with no
+special characters, English prose with an occasional `&`, ASCII where about
+15% of the characters are `&`, `<`, or `>`, and non-ASCII text with the same
+dense special characters. The **htmpy** path builds a `p` element per
+paragraph, **htmpy repeat** uses `p.repeat(paragraphs)`, and **Jinja** renders a
+compiled, autoescaped template with a `for` loop. Each variant is checked
+against independently escaped expected HTML before timing.
+
+htmpy escapes text with one `str.replace` pass per special character that is
+present, checking presence first with `in`, which uses a vectorized scan and
+skips the slower counting scan inside `str.replace` for characters that are
+absent. Jinja uses markupsafe's C extension, which escapes in a single pass, so
+text dense with special characters favors Jinja while clean text and ordinary
+prose favor htmpy. Text containing quotes is avoided because markupsafe writes
+`&#34;` and `&#39;` where htmpy leaves text quotes alone and writes `&quot;`
+and `&#x27;` in attributes. Results report UTF-8 output
+size and median time per article across five repeats of 1,000 articles, with
+input preparation, Jinja compilation, validation, and printing excluded.

@@ -4,7 +4,6 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from enum import Enum
 from functools import lru_cache
-from html import escape
 from typing import Protocol, Self, overload
 
 
@@ -51,26 +50,50 @@ def _valid_attribute_name(name: str) -> bool:
     return _ATTRIBUTE_NAME.fullmatch(name) is not None
 
 
+# Text is escaped inline on the hot paths below rather than through html.escape: the
+# membership checks use a vectorized scan and skip the slower str.replace counting
+# scan for characters that are absent, and avoiding the call matters per element.
+def _escape_attribute(value: str) -> str:
+    """Escape an attribute value, including both quote characters."""
+    if "&" in value:
+        value = value.replace("&", "&amp;")
+    if "<" in value:
+        value = value.replace("<", "&lt;")
+    if ">" in value:
+        value = value.replace(">", "&gt;")
+    if '"' in value:
+        value = value.replace('"', "&quot;")
+    if "'" in value:
+        value = value.replace("'", "&#x27;")
+    return value
+
+
 def _render_child(child: Child | Mapping[str, Attribute]) -> str:
     if type(child) is Element:
         return child._html
     if type(child) is str:
-        return escape(child, quote=False)
+        if "&" in child:
+            child = child.replace("&", "&amp;")
+        if "<" in child:
+            child = child.replace("<", "&lt;")
+        if ">" in child:
+            child = child.replace(">", "&gt;")
+        return child
     if child is None:
         return ""
     if type(child) is int:
         return str(child)
+    if isinstance(child, (list, tuple)):
+        return "".join(
+            [item._html if type(item) is Element else _render_child(item) for item in child]
+        )
     if isinstance(child, _Markup):
         return child._html
     html = getattr(child, "__html__", None)
     if html is not None:
         return str(html())
     if isinstance(child, (str, int)):
-        return escape(str(child), quote=False)
-    if isinstance(child, (list, tuple)):
-        return "".join(
-            [item._html if type(item) is Element else _render_child(item) for item in child]
-        )
+        return _render_child(str(child))
     if isinstance(child, Mapping):
         raise TypeError("Attributes must be the first argument, not a child")
     raise TypeError(f"Unsupported HTML child: {type(child).__name__}")
@@ -194,9 +217,10 @@ class Element(_Markup):
     """An immutable HTML element built from a tag, leading mapping, and children."""
 
     # Share the tag definition between calls. Most elements store fully rendered HTML.
-    # Wrapping a single element stores the child and a run count of identical wrappers
-    # instead, so deep nesting avoids copying the child's HTML at every level; the
-    # rendered HTML is materialized by __getattr__ the first time it is read.
+    # Wrapping a single element in a run of identical tags, or wrapping such a run,
+    # stores the child and a run count instead, so deep nesting avoids copying the
+    # child's HTML at every level; the rendered HTML is materialized by __getattr__
+    # the first time it is read.
     __slots__ = ("_count", "_inner", "_tag")
     _tag: _Tag
     _inner: str | Element
@@ -206,9 +230,14 @@ class Element(_Markup):
         """Materialize and cache the rendered HTML of an element that wraps a chain."""
         if name != "_html":
             raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
+        node: str | Element = self._inner
+        if type(node) is str:
+            tag, count = self._tag, self._count
+            html = self._html = f"{tag.opening * count}{node}{tag.closing * count}"
+            return html
         openings: list[str] = []
         closings: list[str] = []
-        node: str | Element = self
+        node = self
         while not isinstance(node, str):
             tag, count = node._tag, node._count
             openings.append(tag.opening * count)
@@ -242,28 +271,6 @@ class Element(_Markup):
             return element
         return element.__call__(first, *children)
 
-    @classmethod
-    def _from_content(
-        cls,
-        _tag: str,
-        _attributes: tuple[tuple[str, Attribute], ...] = (),
-        _content: str = "",
-    ) -> Self:
-        """Construct from validated attributes and already escaped content."""
-        doctype = "<!doctype html>" if _tag == "html" else ""
-        ending = "" if _tag in _VOID_TAGS else f"</{_tag}>"
-        attributes = []
-        for name, value in _attributes:
-            if value is None or value is False:
-                continue
-            if value is True:
-                attributes.append(f" {name}")
-            else:
-                attributes.append(f' {name}="{escape(str(value), quote=True)}"')
-        opening = f"{doctype}<{_tag}{''.join(attributes)}>"
-        rendered = f"{opening}{_content}{ending}" if ending else opening
-        return _element(cls, _Tag(_tag, _attributes, opening, ending), rendered)
-
     @overload
     def __call__(self, /, *children: Child) -> Self: ...
 
@@ -278,34 +285,63 @@ class Element(_Markup):
     ) -> Self:
         """Set children, optionally merging attributes from a leading dictionary."""
         definition = self._tag
-        if not children and definition.closing:
+        closing = definition.closing
+        if not children and closing:
             if type(first) is str:
-                content = escape(first, quote=False)
-                rendered = f"{definition.opening}{content}{definition.closing}"
-                return _element(type(self), definition, rendered)
-            if type(first) is Element:
-                # Wrap without copying: extend a run of identical wrappers, link a nested
-                # chain, or start a new run around an already rendered child.
+                if "&" in first:
+                    first = first.replace("&", "&amp;")
+                if "<" in first:
+                    first = first.replace("<", "&lt;")
+                if ">" in first:
+                    first = first.replace(">", "&gt;")
                 element = _new(type(self))
                 element._tag = definition
-                if first._count and first._tag is definition:
-                    element._inner = first._inner
-                    element._count = first._count + 1
-                else:
-                    element._inner = first if first._count else first._html
+                element._html = f"{definition.opening}{first}{closing}"
+                element._count = 0
+                return element
+            if type(first) is Element:
+                # Extend a run of identical wrappers, or start one around a flat element
+                # with the same tag, without copying the child's HTML.
+                tag, count = first._tag, first._count
+                if tag is definition:
+                    element = _new(type(self))
+                    element._tag = definition
+                    element._inner = first._inner if count else first._html
+                    element._count = count + 1
+                    return element
+                element = _new(type(self))
+                element._tag = definition
+                if count:
+                    # Link a chain of other tags; its HTML is materialized when read.
+                    element._inner = first
                     element._count = 1
+                    return element
+                element._html = f"{definition.opening}{first._html}{closing}"
+                element._count = 0
+                return element
+            if type(first) is int:
+                element = _new(type(self))
+                element._tag = definition
+                element._html = f"{definition.opening}{first}{closing}"
+                element._count = 0
                 return element
         arguments: tuple[Child | Mapping[str, Attribute], ...] = children
-        if first is not _Missing.CHILD:
-            arguments = (first, *children)
-        attributes = definition.attributes
         # Skip the slow Mapping ABC check for the common string and element first arguments.
-        if arguments and (
-            isinstance(arguments[0], dict)
-            or (type(arguments[0]) not in (str, Element) and isinstance(arguments[0], Mapping))
+        if first is _Missing.CHILD:
+            pass
+        elif isinstance(first, dict) or (
+            type(first) not in (str, Element) and isinstance(first, Mapping)
         ):
-            updates = tuple(arguments[0].items())
-            for name, value in updates:
+            updates = first
+            attributes = definition.attributes
+            if attributes:
+                merged = dict(attributes)
+                merged.update(updates)
+                attributes = tuple(merged.items())
+            else:
+                attributes = tuple(updates.items())
+            parts = []
+            for name, value in attributes:
                 valid = (
                     _valid_attribute_name(name)
                     if type(name) is str
@@ -313,43 +349,66 @@ class Element(_Markup):
                 )
                 if not valid:
                     raise ValueError(f"Invalid HTML attribute name: {name!r}")
-                if value is not None and not isinstance(value, (str, int, bool)):
+                if value is None or value is False:
+                    continue
+                if value is True:
+                    parts.append(f" {name}")
+                elif type(value) is str:
+                    parts.append(f' {name}="{_escape_attribute(value)}"')
+                elif isinstance(value, (str, int)):
+                    parts.append(f' {name}="{_escape_attribute(str(value))}"')
+                else:
                     raise TypeError(f"Unsupported HTML attribute value: {type(value).__name__}")
-            if attributes:
-                merged = dict(attributes)
-                merged.update(updates)
-                attributes = tuple(merged.items())
-            else:
-                attributes = updates
-            arguments = arguments[1:]
-        if not definition.closing and arguments:
+            name = definition.name
+            doctype = "<!doctype html>" if name == "html" else ""
+            # Fill the slots directly; calling _Tag.__init__ costs as much as the rest.
+            definition = _new(_Tag)
+            definition.name = name
+            definition.attributes = attributes
+            definition.opening = f"{doctype}<{name}{''.join(parts)}>"
+            definition.closing = closing
+        else:
+            arguments = (first, *children)
+        if not closing and arguments:
             raise ValueError(f"The {definition.name} element cannot have children")
         if not arguments:
             content = ""
         elif len(arguments) == 1:
             content = _render_child(arguments[0])
         else:
-            content = "".join([_render_child(child) for child in arguments])
-        if attributes is definition.attributes:
-            rendered = (
-                f"{definition.opening}{content}{definition.closing}"
-                if definition.closing
-                else definition.opening
+            content = "".join(
+                [
+                    child._html if type(child) is Element else _render_child(child)
+                    for child in arguments
+                ]
             )
-            return _element(type(self), definition, rendered)
-        return type(self)._from_content(definition.name, attributes, content)
+        element = _new(type(self))
+        element._tag = definition
+        element._html = f"{definition.opening}{content}{closing}" if closing else definition.opening
+        element._count = 0
+        return element
 
     def repeat(self, items: Iterable[Child], /) -> Fragment:
         """Render one element per item, reusing attributes and replacing children."""
         definition = self._tag
         if not definition.closing:
             raise ValueError(f"The {definition.name} element cannot have children")
-        opening, closing = definition.opening, definition.closing
-        parts = []
+        contents = []
         for item in items:
-            content = escape(item, quote=False) if type(item) is str else _render_child(item)
-            parts.extend((opening, content, closing))
-        return Fragment._from_rendered("".join(parts))
+            if type(item) is str:
+                if "&" in item:
+                    item = item.replace("&", "&amp;")
+                if "<" in item:
+                    item = item.replace("<", "&lt;")
+                if ">" in item:
+                    item = item.replace(">", "&gt;")
+                contents.append(item)
+            else:
+                contents.append(_render_child(item))
+        if not contents:
+            return Fragment._from_rendered("")
+        opening, closing = definition.opening, definition.closing
+        return Fragment._from_rendered(f"{opening}{f'{closing}{opening}'.join(contents)}{closing}")
 
     def __reduce__(
         self,
