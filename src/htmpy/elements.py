@@ -248,6 +248,9 @@ class Element(_Markup):
             content = escape(first, quote=False)
             rendered = f"{definition.opening}{content}{definition.closing}"
             return _element(type(self), definition, rendered)
+        if type(first) is Element and not children and definition.closing:
+            rendered = f"{definition.opening}{first._html}{definition.closing}"
+            return _element(type(self), definition, rendered)
         arguments: tuple[Child | Mapping[str, Attribute], ...] = children
         if first is not _Missing.CHILD:
             arguments = (first, *children)

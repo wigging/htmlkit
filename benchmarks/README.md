@@ -86,3 +86,44 @@ The script reports median microseconds per complete fragment across five repeats
 of 10,000 small fragments or 1,000 large fragments. As with the other benchmarks,
 `timeit` disables garbage collection, and results depend on the machine and Python
 version. These are eager renders, not streaming or peak-memory measurements.
+
+## Deep nesting benchmark
+
+```sh
+uv run benchmarks/nested.py
+```
+
+Builds a fresh paragraph inside 10, 100, 1,000, and 5,000 nested `div` elements,
+using both a short text payload and a payload 256 times larger. Each render
+includes escaping the paragraph text, constructing every wrapper, and returning
+the complete HTML string. An iterative loop avoids measuring Python's recursion
+limit. No intermediate elements are retained after their parent is constructed.
+
+The Jinja path uses a compiled, autoescaped template with loops that emit the
+opening wrappers, the escaped paragraph, and the closing wrappers. It produces
+the same nested HTML without recursive macros or repeated subtree construction.
+This compares complete output generation, not equivalent component-call trees.
+Template compilation is excluded from both time and memory measurements, as in
+the other benchmarks; no completed output is cached.
+
+Every case is checked against independently assembled expected HTML, including
+escaped ampersands and angle brackets, before timing. Input preparation and
+validation are excluded. The output reports UTF-8 output size and median time
+across five repeats of 100 renders, with `timeit` disabling garbage collection.
+Each depth and payload combination reports both htmpy and Jinja results.
+
+Peak memory is measured separately with `tracemalloc`, using the median of five
+single renders and a fresh tracing session for each sample. The final string
+remains alive when the peak is read. Tracing is disabled during timing, and
+inputs and expected strings are allocated before tracing starts. The reported
+peak covers traced Python allocations, not process RSS or total bytes allocated
+over the render's lifetime.
+
+In htmpy, each parent copies its child's rendered HTML. For a chain of depth d and escaped
+payload length n, this entails O(d² + d·n) cumulative character copying, while
+peak live string storage can remain O(d + n) when intermediate elements are
+released. Retaining all intermediate elements would be a different memory
+workload. Use the depth and payload sweeps to evaluate future rendering changes;
+these synthetic depths are stress cases, not browser-layout benchmarks or a
+reason on their own to replace eager rendering. Results depend on the machine
+and Python version.
