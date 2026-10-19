@@ -39,7 +39,9 @@ def test_tag_renders_its_html_name(name):
         assert str(element) == "<!doctype html><html></html>"
     else:
         assert str(element("<")) == f"<{tag}>&lt;</{tag}>"
-    assert f'<{tag} id="x">' in str(element({"id": "x"}))
+    prefix = "<!doctype html>" if tag == "html" else ""
+    closing = "" if tag in VOID else f"</{tag}>"
+    assert str(element({"id": "x"})) == f'{prefix}<{tag} id="x">{closing}'
 
 
 def test_tag_module_covers_the_living_standard():
