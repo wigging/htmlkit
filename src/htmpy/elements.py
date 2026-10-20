@@ -4,7 +4,7 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from enum import Enum
 from functools import lru_cache
-from typing import Protocol, Self, overload
+from typing import Protocol, Self
 
 
 class SupportsHtml(Protocol):
@@ -68,7 +68,7 @@ def _escape_attribute(value: str) -> str:
     return value
 
 
-def _render_child(child: Child | Mapping[str, Attribute]) -> str:
+def _render_child(child: Child) -> str:
     if type(child) is Element:
         return child._html
     if type(child) is str:
@@ -95,7 +95,7 @@ def _render_child(child: Child | Mapping[str, Attribute]) -> str:
     if isinstance(child, (str, int)):
         return _render_child(str(child))
     if isinstance(child, Mapping):
-        raise TypeError("Attributes must be the first argument, not a child")
+        raise TypeError("Pass attributes as keywords, not dictionaries")
     raise TypeError(f"Unsupported HTML child: {type(child).__name__}")
 
 
@@ -214,7 +214,7 @@ def _element[E: Element](cls: type[E], tag: _Tag, html: str) -> E:
 
 
 class Element(_Markup):
-    """An immutable HTML element built from a tag, leading mapping, and children."""
+    """An immutable HTML element built from a tag, children, and keyword attributes."""
 
     # Share the tag definition between calls. Most elements store fully rendered HTML.
     # Wrapping a single element in a run of identical tags, or wrapping such a run,
@@ -247,46 +247,37 @@ class Element(_Markup):
         html = self._html = f"{''.join(openings)}{node}{''.join(closings)}"
         return html
 
-    @overload
-    def __new__(cls, tag: str, /, *children: Child) -> Self: ...
-
-    @overload
-    def __new__(
-        cls, tag: str, attributes: Mapping[str, Attribute], /, *children: Child
-    ) -> Self: ...
-
     def __new__(
         cls,
         tag: str,
-        first: Child | Mapping[str, Attribute] | _Missing = _Missing.CHILD,
         /,
         *children: Child,
+        **attributes: Attribute,
     ) -> Self:
-        """Build an element from a tag, optional leading attributes, and children."""
+        """Build an element from a tag, children, and keyword attributes."""
         if not isinstance(tag, str):
             raise TypeError("HTML tag name must be a string")
         definition = _definition(tag)
         element = _element(cls, definition, f"{definition.opening}{definition.closing}")
-        if first is _Missing.CHILD:
+        if not children and not attributes:
             return element
-        return element.__call__(first, *children)
-
-    @overload
-    def __call__(self, /, *children: Child) -> Self: ...
-
-    @overload
-    def __call__(self, attributes: Mapping[str, Attribute], /, *children: Child) -> Self: ...
+        return element.__call__(*children, **attributes)
 
     def __call__(
         self,
-        first: Child | Mapping[str, Attribute] | _Missing = _Missing.CHILD,
+        first: Child | _Missing = _Missing.CHILD,
         /,
         *children: Child,
+        **attributes: Attribute,
     ) -> Self:
-        """Set children, optionally merging attributes from a leading dictionary."""
+        """Replace children and merge keyword attributes.
+
+        Attribute names lose one trailing underscore and replace remaining
+        underscores with hyphens, such as ``class_`` and ``aria_label``.
+        """
         definition = self._tag
         closing = definition.closing
-        if not children and closing:
+        if not children and not attributes and closing:
             if type(first) is str:
                 if "&" in first:
                     first = first.replace("&", "&amp;")
@@ -325,23 +316,19 @@ class Element(_Markup):
                 element._html = f"{definition.opening}{first}{closing}"
                 element._count = 0
                 return element
-        arguments: tuple[Child | Mapping[str, Attribute], ...] = children
-        # Skip the slow Mapping ABC check for the common string and element first arguments.
-        if first is _Missing.CHILD:
-            pass
-        elif isinstance(first, dict) or (
-            type(first) not in (str, Element) and isinstance(first, Mapping)
-        ):
-            updates = first
-            attributes = definition.attributes
-            if attributes:
-                merged = dict(attributes)
-                merged.update(updates)
-                attributes = tuple(merged.items())
-            else:
-                attributes = tuple(updates.items())
+        arguments = children if first is _Missing.CHILD else (first, *children)
+        if attributes:
+            updates: dict[str, Attribute] = {}
+            for name, value in attributes.items():
+                name = name.removesuffix("_").replace("_", "-")
+                if name in updates:
+                    raise TypeError(f"Duplicate HTML attribute: {name!r}")
+                updates[name] = value
+            merged = dict(definition.attributes)
+            merged.update(updates)
+            normalized = tuple(merged.items())
             parts = []
-            for name, value in attributes:
+            for name, value in normalized:
                 valid = (
                     _valid_attribute_name(name)
                     if type(name) is str
@@ -364,11 +351,9 @@ class Element(_Markup):
             # Fill the slots directly; calling _Tag.__init__ costs as much as the rest.
             definition = _new(_Tag)
             definition.name = name
-            definition.attributes = attributes
+            definition.attributes = normalized
             definition.opening = f"{doctype}<{name}{''.join(parts)}>"
             definition.closing = closing
-        else:
-            arguments = (first, *children)
         if not closing and arguments:
             raise ValueError(f"The {definition.name} element cannot have children")
         if not arguments:

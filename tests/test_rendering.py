@@ -28,7 +28,7 @@ from htmpy import (
 
 def test_document():
     """Verify HTML documents include a doctype and nested content."""
-    page = html({"lang": "en"}, head(), body(h1("Hello"), p("First"), p("Second")))
+    page = html(head(), body(h1("Hello"), p("First"), p("Second")), lang="en")
     assert str(page) == (
         '<!doctype html><html lang="en"><head></head><body>'
         "<h1>Hello</h1><p>First</p><p>Second</p></body></html>"
@@ -40,9 +40,9 @@ def test_head_metadata():
     """Verify head metadata renders void tags and escapes attribute values."""
     page = html(
         head(
-            meta({"charset": "utf-8"}),
-            meta({"name": "description", "content": 'A & "B"'}),
-            link({"rel": "stylesheet", "href": "/style.css?a=1&b=2"}),
+            meta(charset="utf-8"),
+            meta(name="description", content='A & "B"'),
+            link(rel="stylesheet", href="/style.css?a=1&b=2"),
         ),
         body(p("Hello")),
     )
@@ -71,9 +71,7 @@ def test_headings(element, tag):
     """Verify every heading level supports escaped content and attributes."""
     assert str(element()) == f"<{tag}></{tag}>"
     assert str(element("Section & <title>")) == f"<{tag}>Section &amp; &lt;title&gt;</{tag}>"
-    assert str(element({"id": "section"}, "Section ", 2)) == (
-        f'<{tag} id="section">Section 2</{tag}>'
-    )
+    assert str(element("Section ", 2, id="section")) == (f'<{tag} id="section">Section 2</{tag}>')
 
 
 @pytest.mark.parametrize(
@@ -89,7 +87,7 @@ def test_headings(element, tag):
 def test_controls_and_containers(element, tag, attrs, rendered_attrs):
     """Verify controls and containers render attributes and nested child sequences."""
     assert str(element()) == f"<{tag}></{tag}>"
-    assert str(element(attrs, "A & <B>", [" details ", 2])) == (
+    assert str(element("A & <B>", [" details ", 2], **attrs)) == (
         f"<{tag}{rendered_attrs}>A &amp; &lt;B&gt; details 2</{tag}>"
     )
 
@@ -97,8 +95,8 @@ def test_controls_and_containers(element, tag, attrs, rendered_attrs):
 def test_lists():
     """Verify nested ordered and unordered lists preserve structure and attributes."""
     element = ul(
-        {"class": "items"},
-        [li("A & B"), li("Steps", ol({"start": 3}, li("First"), li({"value": 7}, "Last")))],
+        [li("A & B"), li("Steps", ol(li("First"), li("Last", value=7), start=3))],
+        class_="items",
     )
     assert str(element) == (
         '<ul class="items"><li>A &amp; B</li><li>Steps<ol start="3">'

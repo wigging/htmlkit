@@ -11,7 +11,7 @@ from htmpy import Fragment, Raw, body, html, p
 @pytest.mark.parametrize("kind", ["element", "fragment", "raw"])
 def test_html_response(kind):
     """Verify all markup types work directly as UTF-8 FastAPI response content."""
-    page = html(body(p({"title": '"café"'}, "雪 & <hello>")))
+    page = html(body(p("雪 & <hello>", title='"café"')))
     if kind == "fragment":
         page = Fragment(page)
     elif kind == "raw":

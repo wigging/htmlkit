@@ -6,7 +6,6 @@ from htmpy import Element, body, h1, head, html, p, title
 def basic_page() -> Element:
     """Create a basic HTML web page."""
     page = html(
-        {"lang": "en"},
         head(title("Hello there!")),
         body(
             h1("Hello there!"),
@@ -16,6 +15,7 @@ def basic_page() -> Element:
             ),
             p("The last paragraph is here."),
         ),
+        lang="en",
     )
 
     return page

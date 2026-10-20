@@ -17,7 +17,7 @@ from htmpy import (
     head,
     header,
     html,
-    input,
+    input_,
     label,
     li,
     link,
@@ -134,9 +134,9 @@ REPEAT = 5
 
 # Static parts prepared once for the reused htmpy renderer.
 HEAD = head(
-    meta({"charset": "utf-8"}),
+    meta(charset="utf-8"),
     title(PAGE_TITLE),
-    link({"rel": "stylesheet", "href": "/styles.css"}),
+    link(rel="stylesheet", href="/styles.css"),
 )
 HEADER = header(
     nav(
@@ -144,8 +144,9 @@ HEADER = header(
             [
                 li(
                     a(
-                        {"href": href, "class": "active" if href == CURRENT else None},
                         text,
+                        href=href,
+                        class_="active" if href == CURRENT else None,
                     )
                 )
                 for href, text in NAVIGATION
@@ -154,18 +155,18 @@ HEADER = header(
     ),
     h1(PAGE_TITLE),
 )
-TABLE_HEAD = thead(tr([th({"scope": "col"}, column) for column in COLUMNS]))
+TABLE_HEAD = thead(tr([th(column, scope="col") for column in COLUMNS]))
 FORM_TAIL = (
-    label({"for": "notes"}, "Notes"),
-    textarea({"id": "notes", "name": "notes", "rows": 4}, NOTES),
-    button({"type": "submit", "class": "primary"}, "Save & close"),
+    label("Notes", for_="notes"),
+    textarea(NOTES, id="notes", name="notes", rows=4),
+    button("Save & close", type="submit", class_="primary"),
 )
-FOOTER = footer(p("Updated ", time({"datetime": UPDATED}, UPDATED_LABEL)))
-PAGE = html({"lang": "en"})
-DATA_TABLE = table({"class": "data"})
-NUMBER_CELL = td({"class": "number"})
-ITEM_FORM = form({"method": "post", "action": "/items"})
-PRIORITY_SELECT = select({"id": "priority", "name": "priority"})
+FOOTER = footer(p("Updated ", time(UPDATED_LABEL, datetime=UPDATED)))
+PAGE = html(lang="en")
+DATA_TABLE = table(class_="data")
+NUMBER_CELL = td(class_="number")
+ITEM_FORM = form(method="post", action="/items")
+PRIORITY_SELECT = select(id="priority", name="priority")
 
 
 def render_htmpy_fresh() -> str:
@@ -174,11 +175,10 @@ def render_htmpy_fresh() -> str:
     priority = PRIORITY
     rows = ROWS
     page = html(
-        {"lang": "en"},
         head(
-            meta({"charset": "utf-8"}),
+            meta(charset="utf-8"),
             title(PAGE_TITLE),
-            link({"rel": "stylesheet", "href": "/styles.css"}),
+            link(rel="stylesheet", href="/styles.css"),
         ),
         body(
             header(
@@ -187,8 +187,9 @@ def render_htmpy_fresh() -> str:
                         [
                             li(
                                 a(
-                                    {"href": href, "class": "active" if href == current else None},
                                     text,
+                                    href=href,
+                                    class_="active" if href == current else None,
                                 )
                             )
                             for href, text in NAVIGATION
@@ -199,65 +200,67 @@ def render_htmpy_fresh() -> str:
             ),
             tags.main(
                 section(
-                    {"id": "inventory"},
                     h2(len(rows), " items"),
                     table(
-                        {"class": "data"},
-                        thead(tr([th({"scope": "col"}, column) for column in COLUMNS])),
+                        thead(tr([th(column, scope="col") for column in COLUMNS])),
                         tbody(
                             [
                                 tr(
                                     td(row.id),
                                     td(row.name),
                                     td(row.owner),
-                                    td({"class": "number"}, row.quantity),
-                                    td({"class": "status " + row.status}, row.status),
-                                    td(a({"href": row.href}, "Edit")),
+                                    td(row.quantity, class_="number"),
+                                    td(row.status, class_="status " + row.status),
+                                    td(a("Edit", href=row.href)),
                                 )
                                 for row in rows
                             ]
                         ),
+                        class_="data",
                     ),
+                    id="inventory",
                 ),
                 section(
-                    {"id": "new-item"},
                     h2("Add item"),
                     form(
-                        {"method": "post", "action": "/items"},
                         [
                             (
-                                label({"for": name}, text),
-                                input(
-                                    {
-                                        "type": kind,
-                                        "id": name,
-                                        "name": name,
-                                        "value": value,
-                                        "required": True,
-                                    }
+                                label(text, for_=name),
+                                input_(
+                                    type=kind,
+                                    id=name,
+                                    name=name,
+                                    value=value,
+                                    required=True,
                                 ),
                             )
                             for name, text, kind, value in FIELDS
                         ],
-                        label({"for": "priority"}, "Priority"),
+                        label("Priority", for_="priority"),
                         select(
-                            {"id": "priority", "name": "priority"},
                             [
                                 option(
-                                    {"value": value, "selected": value == priority},
                                     value.capitalize(),
+                                    value=value,
+                                    selected=value == priority,
                                 )
                                 for value in PRIORITIES
                             ],
+                            id="priority",
+                            name="priority",
                         ),
-                        label({"for": "notes"}, "Notes"),
-                        textarea({"id": "notes", "name": "notes", "rows": 4}, NOTES),
-                        button({"type": "submit", "class": "primary"}, "Save & close"),
+                        label("Notes", for_="notes"),
+                        textarea(NOTES, id="notes", name="notes", rows=4),
+                        button("Save & close", type="submit", class_="primary"),
+                        method="post",
+                        action="/items",
                     ),
+                    id="new-item",
                 ),
             ),
-            footer(p("Updated ", time({"datetime": UPDATED}, UPDATED_LABEL))),
+            footer(p("Updated ", time(UPDATED_LABEL, datetime=UPDATED))),
         ),
+        lang="en",
     )
     return str(page)
 
@@ -272,7 +275,6 @@ def render_htmpy_reused() -> str:
             HEADER,
             tags.main(
                 section(
-                    {"id": "inventory"},
                     h2(len(rows), " items"),
                     DATA_TABLE(
                         TABLE_HEAD,
@@ -283,45 +285,45 @@ def render_htmpy_reused() -> str:
                                     td(row.name),
                                     td(row.owner),
                                     NUMBER_CELL(row.quantity),
-                                    td({"class": "status " + row.status}, row.status),
-                                    td(a({"href": row.href}, "Edit")),
+                                    td(row.status, class_="status " + row.status),
+                                    td(a("Edit", href=row.href)),
                                 )
                                 for row in rows
                             ]
                         ),
                     ),
+                    id="inventory",
                 ),
                 section(
-                    {"id": "new-item"},
                     h2("Add item"),
                     ITEM_FORM(
                         [
                             (
-                                label({"for": name}, text),
-                                input(
-                                    {
-                                        "type": kind,
-                                        "id": name,
-                                        "name": name,
-                                        "value": value,
-                                        "required": True,
-                                    }
+                                label(text, for_=name),
+                                input_(
+                                    type=kind,
+                                    id=name,
+                                    name=name,
+                                    value=value,
+                                    required=True,
                                 ),
                             )
                             for name, text, kind, value in FIELDS
                         ],
-                        label({"for": "priority"}, "Priority"),
+                        label("Priority", for_="priority"),
                         PRIORITY_SELECT(
                             [
                                 option(
-                                    {"value": value, "selected": value == priority},
                                     value.capitalize(),
+                                    value=value,
+                                    selected=value == priority,
                                 )
                                 for value in PRIORITIES
                             ]
                         ),
                         FORM_TAIL,
                     ),
+                    id="new-item",
                 ),
             ),
             FOOTER,

@@ -13,12 +13,12 @@ TEMPLATE = Environment(autoescape=True).from_string(
     '<link rel="stylesheet" href="/styles.css"></head><body>'
     '<h1>{{ heading }}</h1><p class="intro">{{ message }}</p></body></html>'
 )
-PAGE = html({"lang": "en"})
+PAGE = html(lang="en")
 HEAD = head(
-    meta({"charset": "utf-8"}),
-    link({"rel": "stylesheet", "href": "/styles.css"}),
+    meta(charset="utf-8"),
+    link(rel="stylesheet", href="/styles.css"),
 )
-PARAGRAPH = p({"class": "intro"})
+PARAGRAPH = p(class_="intro")
 NUMBER = 10_000
 REPEAT = 5
 
@@ -27,12 +27,12 @@ def render_htmpy_fresh() -> str:
     """Render a page by constructing every htmpy element anew."""
     return str(
         html(
-            {"lang": "en"},
             head(
-                meta({"charset": "utf-8"}),
-                link({"rel": "stylesheet", "href": "/styles.css"}),
+                meta(charset="utf-8"),
+                link(rel="stylesheet", href="/styles.css"),
             ),
-            body(h1(CONTEXT["heading"]), p({"class": "intro"}, CONTEXT["message"])),
+            body(h1(CONTEXT["heading"]), p(CONTEXT["message"], class_="intro")),
+            lang="en",
         )
     )
 

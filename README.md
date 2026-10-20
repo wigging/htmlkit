@@ -1,18 +1,18 @@
 # htmpy
 
 Write HTML in Python. Requires Python 3.14 or newer, with no runtime dependencies.
-Pass an optional attribute dictionary first, followed by child elements or text.
+Pass child elements or text positionally and attributes as keywords.
 
 ```python
-from htmpy import html, head, title, body, h1, p
+import htmpy
 
-page = html(
-    {"lang": "en"},
-    head(title("Hello from Python")),
-    body(
-        h1("Hello from Python"),
-        p({"class": "intro"}, "Write HTML with htmpy."),
+page = htmpy.html(
+    htmpy.head(htmpy.title("Hello from Python")),
+    htmpy.body(
+        htmpy.h1("Hello from Python"),
+        htmpy.p("Write HTML with htmpy.", class_="intro"),
     ),
+    lang="en",
 )
 
 print(page)
@@ -26,24 +26,32 @@ Output:
 
 ## Elements and content
 
-Import HTML elements by tag name. Use `del_` for `del`; `svg` and `math` are not
-included. For custom tags, import `Element` and use `Element("my-widget", "Text")`.
+Use `import htmpy`, import individual elements, or use `from htmpy import tags`
+and access elements such as `tags.p`. Use `input_`, `map_`, `object_`, and `del_`
+for the corresponding HTML tags; `svg` and `math` are not included.
+For custom tags, import `Element` and use `Element("my-widget", "Text")`.
 Void elements such as `meta`, `link`, and `input` do not accept children.
 
 Children can be text, integers, elements, fragments, or nested lists and tuples.
 `None` is ignored. Text and attribute values are escaped automatically:
 
 ```python
+from htmpy import p
+
 str(p("A < B & C"))
 # '<p>A &lt; B &amp; C</p>'
 
-str(p({"class": "note", "data-id": 7}, "Note"))
+str(p("Note", class_="note", data_id=7))
 # '<p class="note" data-id="7">Note</p>'
 ```
 
-Use literal attribute names such as `"class"` and `"data-id"`. `True` adds a bare
-attribute; `False` and `None` omit it. Tag names, attribute names, and executable
-attribute values must be trusted: escaping is not sanitization.
+Attributes are keywords, not positional mappings. A trailing underscore is stripped,
+then internal underscores become hyphens: `class_` becomes `class`, `for_` becomes
+`for`, `data_id` becomes `data-id`, and `http_equiv` becomes `http-equiv`.
+`True` adds a bare attribute; `False` and `None` omit it. Supplying two keywords
+that normalize to the same attribute name raises `TypeError`.
+Tag names, attribute names, and executable attribute values must be trusted:
+escaping is not sanitization.
 
 Render with `str(element)` or `print(element)`. The `html` element adds the HTML5
 doctype. Calling an existing element creates a new one, merging attributes and
@@ -57,7 +65,7 @@ Use `repeat()` to create one element per item, sharing the same attributes:
 from htmpy import ul, li
 
 items = ul(li.repeat(["Apples", "Pears & peaches"]))
-row = li({"class": "result"})
+row = li(class_="result")
 results = ul(row.repeat(["Alice", "Bob"]))
 ```
 

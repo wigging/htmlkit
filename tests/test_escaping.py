@@ -15,11 +15,11 @@ def test_escaping():
         "<ul><li>&lt;one&gt; &amp; two</li>"
         "&lt;li&gt;&amp;lt;one&amp;gt; &amp;amp; two&lt;/li&gt;</ul>"
     )
-    assert str(p({"title": "\"<&'"}, "<script>alert('x')</script> &")) == (
+    assert str(p("<script>alert('x')</script> &", title="\"<&'")) == (
         "<p title=\"&quot;&lt;&amp;&#x27;\">&lt;script&gt;alert('x')&lt;/script&gt; &amp;</p>"
     )
     with pytest.raises(ValueError):
-        p({'x="injected"': "value"})
+        p(**{'x="injected"': "value"})
 
 
 def test_raw():

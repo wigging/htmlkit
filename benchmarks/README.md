@@ -14,7 +14,7 @@ script checks all three outputs against the expected HTML before timing.
 
 The benchmark reports three paths:
 
-- **htmpy fresh** constructs every element and attribute dictionary on each iteration.
+- **htmpy fresh** constructs every element with keyword attributes on each iteration.
 - **htmpy reused** prepares the static head and the HTML and paragraph attribute
   templates once. Each iteration constructs fresh dynamic elements, escapes the
   heading and message, and renders a complete page. It uses the existing immutable
@@ -54,7 +54,7 @@ excluded. Each repeat renders 1,000 lists rather than 10,000 pages to keep the
 larger workload practical. Results are in microseconds per complete list, not
 per item. There is no separate htmpy reused path because the bare `ul` and `li`
 elements already serve as reusable templates; no static subtrees or attribute
-dictionaries need preparation.
+values need preparation.
 
 ## Fragment benchmark
 
@@ -151,7 +151,7 @@ conditionally `selected` option, a textarea, and a submit button; and a footer
 with a `time` element. The page has about 430 elements and 370 escaped values,
 so element construction dominates rather than any single long string.
 
-The **htmpy fresh** path builds every element and attribute dictionary on each
+The **htmpy fresh** path builds every element with keyword attributes on each
 render. The **htmpy reused** path prepares the static head, header, table head,
 footer, and attributed `html`, `table`, `td`, `form`, and `select` templates
 once, then builds the table body and form fields on each render. The **Jinja**

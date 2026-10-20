@@ -46,7 +46,7 @@ def test_generator_children_rejected(container):
 
 def test_repeat():
     """Verify repeated elements snapshot content and retain the base attributes."""
-    row = li({"class": 'a&"b'}, "replaced")
+    row = li("replaced", class_='a&"b')
     nested: list[Child] = ["雪 & ", p("<inside>")]
     items: list[Child] = ["<one> \"' &", 0, None, nested]
     fragment = row.repeat(item for item in items)
@@ -78,7 +78,7 @@ def test_nested_wrappers():
     """Verify single-element wrapping renders mixed tags, runs, branches, and copies."""
     inner = div(div(p("a & <b>")))
     expected = "<div><div><p>a &amp; &lt;b&gt;</p></div></div>"
-    boxed = div({"class": "box"})
+    boxed = div(class_="box")
     chain = article(section(boxed(boxed(inner))))
     assert str(chain) == (
         f'<article><section><div class="box"><div class="box">{expected}</div></div>'
@@ -91,7 +91,7 @@ def test_nested_wrappers():
     assert str(second) == f"<span>{expected}</span>"
     assert str(inner) == expected
     assert str(body(chain, " & ", second)) == f"<body>{chain} &amp; {second}</body>"
-    assert str(div({"id": "x"}, inner)) == f'<div id="x">{expected}</div>'
+    assert str(div(inner, id="x")) == f'<div id="x">{expected}</div>'
     assert str(div(br)) == "<div><br></div>"
     assert str(inner("replaced")) == "<div>replaced</div>"
     flat = div(div(p("a & <b>")), None)

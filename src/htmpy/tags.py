@@ -1,8 +1,9 @@
 """Every conforming HTML element, grouped as in the HTML Living Standard.
 
 Names follow the element index at https://html.spec.whatwg.org/multipage/indices.html.
-The ``del`` element is exported as ``del_`` because ``del`` is a Python keyword. The
-foreign ``svg`` and ``math`` elements are omitted.
+Names that clash with Python keywords or built-ins have a trailing underscore:
+``del_``, ``input_``, ``map_``, and ``object_``. The foreign ``svg`` and ``math``
+elements are omitted.
 """
 
 from .elements import Element
@@ -94,11 +95,11 @@ source = Element("source")
 img = Element("img")
 iframe = Element("iframe")
 embed = Element("embed")
-object = Element("object")
+object_ = Element("object")
 video = Element("video")
 audio = Element("audio")
 track = Element("track")
-map = Element("map")
+map_ = Element("map")
 area = Element("area")
 
 # Tabular data
@@ -116,7 +117,7 @@ th = Element("th")
 # Forms
 form = Element("form")
 label = Element("label")
-input = Element("input")
+input_ = Element("input")
 button = Element("button")
 select = Element("select")
 option = Element("option")
@@ -195,7 +196,7 @@ __all__ = [
     "i",
     "iframe",
     "img",
-    "input",
+    "input_",
     "ins",
     "kbd",
     "label",
@@ -203,14 +204,14 @@ __all__ = [
     "li",
     "link",
     "main",
-    "map",
+    "map_",
     "mark",
     "menu",
     "meta",
     "meter",
     "nav",
     "noscript",
-    "object",
+    "object_",
     "ol",
     "optgroup",
     "option",

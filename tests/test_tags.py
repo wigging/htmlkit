@@ -1,11 +1,12 @@
 """Check HTML tag exports, names, and rendering behavior."""
 
+import builtins
 import keyword
 
 import pytest
 
 import htmpy
-from htmpy import Element, tags
+from htmpy import Element, div, html, input_, map_, object_, p, tags
 
 VOID = {
     "area",
@@ -41,7 +42,7 @@ def test_tag_renders_its_html_name(name):
         assert str(element("<")) == f"<{tag}>&lt;</{tag}>"
     prefix = "<!doctype html>" if tag == "html" else ""
     closing = "" if tag in VOID else f"</{tag}>"
-    assert str(element({"id": "x"})) == f'{prefix}<{tag} id="x">{closing}'
+    assert str(element(id="x")) == f'{prefix}<{tag} id="x">{closing}'
 
 
 def test_tag_module_covers_the_living_standard():
@@ -50,10 +51,24 @@ def test_tag_module_covers_the_living_standard():
     assert len(set(tags.__all__)) == len(tags.__all__)
     assert tags.del_ is not None and "del" not in tags.__all__
     assert not any(keyword.iskeyword(name) for name in tags.__all__)
-    for name in ("title", "script", "style", "form", "input", "table", "nav", "span", "img"):
+    assert not set(tags.__all__) & set(dir(builtins))
+    for name in ("title", "script", "style", "form", "input_", "table", "nav", "span", "img"):
         assert name in tags.__all__
     assert all(name in htmpy.__all__ for name in tags.__all__)
     assert "svg" not in tags.__all__ and "math" not in tags.__all__
+
+
+def test_import_styles():
+    """Expose the same Python-safe elements through named and package imports."""
+    assert html(div(p("Hi", class_="intro")), lang="en") == htmpy.html(
+        htmpy.div(htmpy.p("Hi", class_="intro")), lang="en"
+    )
+    assert str(map_(object_(input_(type_="text")), name="locations")) == (
+        '<map name="locations"><object><input type="text"></object></map>'
+    )
+    for name in ("input", "map", "object", "del"):
+        assert not hasattr(htmpy, name)
+        assert not hasattr(tags, name)
 
 
 def test_html_shortcut_for_custom_tags_is_consistent():
