@@ -49,34 +49,44 @@ def render_jinja(texts: list[str]) -> str:
 def main() -> None:
     """Validate escaped output and report median rendering times per text variant."""
     variants = {name: paragraphs(phrase) for name, phrase in TEXTS.items()}
+
+    # Check the rendered HTML to make sure htmpy and Jinja create the same output
     for texts in variants.values():
         escaped = [
             text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") for text in texts
         ]
+
         expected = (
             "<article><h1>Escaping &amp; &lt;markup&gt;</h1>"
             + "".join(f"<p>{text}</p>" for text in escaped)
             + "</article>"
         )
+
         assert render_htmpy(texts) == render_htmpy_repeat(texts) == render_jinja(texts) == expected
 
     print(
         f"{REPEAT} repeats of {NUMBER:,} articles with {PARAGRAPH_COUNT} paragraphs of "
         f"{PARAGRAPH_LENGTH} characters; median time per article"
     )
+
     print("Input preparation and Jinja compilation excluded; autoescaping enabled.")
+
     renderers = (
         ("htmpy", render_htmpy),
         ("htmpy repeat", render_htmpy_repeat),
         ("Jinja", render_jinja),
     )
+
     print(f"\n{'Text':22}{'Output':>10}" + "".join(f"{name:>16}" for name, _ in renderers))
+
     for name, texts in variants.items():
         size = len(render_jinja(texts).encode())
         timings = []
+
         for _, render in renderers:
             seconds = median(repeat(partial(render, texts), number=NUMBER, repeat=REPEAT)) / NUMBER
             timings.append(seconds * 1_000_000)
+
         print(
             f"{name:22}{size / 1_000:8.1f} KB" + "".join(f"{timing:13.2f} µs" for timing in timings)
         )
