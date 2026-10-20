@@ -15,14 +15,14 @@ def test_public_construction():
     element = Element("section", children, **MappingProxyType(attributes))
     attributes.clear()
     children.clear()
-    expected = '<section title="&quot;&lt;&amp;">&lt;unsafe&gt;&amp;<p>&lt;nested&gt;</p></section>'
+    expected = '<section title="&#34;&lt;&amp;">&lt;unsafe&gt;&amp;<p>&lt;nested&gt;</p></section>'
     assert str(element) == expected
     assert str(Element("p", "<unsafe>&")) == "<p>&lt;unsafe&gt;&amp;</p>"
     assert str(Element("p", (), "<unsafe>&")) == "<p>&lt;unsafe&gt;&amp;</p>"
     assert str(element("<next>", title=None)) == "<section>&lt;next&gt;</section>"
     assert str(element.repeat(["<one>", "&"])) == (
-        '<section title="&quot;&lt;&amp;">&lt;one&gt;</section>'
-        '<section title="&quot;&lt;&amp;">&amp;</section>'
+        '<section title="&#34;&lt;&amp;">&lt;one&gt;</section>'
+        '<section title="&#34;&lt;&amp;">&amp;</section>'
     )
     for cloned in (copy(element), deepcopy(element)):
         assert str(cloned) == expected
@@ -111,6 +111,17 @@ def test_attributes():
     )
     with pytest.raises(TypeError, match="Duplicate HTML attribute"):
         p(class_="one", **{"class": "two"})
+
+
+def test_generated_attribute_names():
+    """Render many distinct runtime attribute names, beyond any internal name cache."""
+    names = {f"data_key_{index}": index for index in range(1500)}
+    rendered = str(p(**names))
+    assert rendered.startswith('<p data-key-0="0" data-key-1="1"')
+    assert rendered.count("=") == 1500 and rendered.endswith('data-key-1499="1499"></p>')
+    assert str(p(data_key_1499="again")) == '<p data-key-1499="again"></p>'
+    with pytest.raises(ValueError, match="Invalid HTML attribute name"):
+        p(**{"data_key_1500 onclick": "x"})
 
 
 def test_attribute_order():

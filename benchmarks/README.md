@@ -164,7 +164,12 @@ Results report the median time per page across five repeats of 1,000 pages,
 with input preparation, Jinja compilation, validation, and printing excluded.
 Every htmpy element costs one Python call and one allocation, so pages with
 hundreds of small elements, such as table cells, are where a compiled template
-that emits static text in bulk has its largest advantage.
+that emits static text in bulk has its largest advantage. Keyword attributes
+add to that: each attributed element normalizes its names through a cached
+lookup, renders the values, and allocates a new tag definition, which costs
+roughly three times as much as an element with only text. Preparing attributed
+elements once, as the reused path does with `td(class_="number")`, pays that
+cost outside the timed render.
 
 ## Escaping benchmark
 
@@ -182,13 +187,14 @@ paragraph, **htmpy repeat** uses `p.repeat(paragraphs)`, and **Jinja** renders a
 compiled, autoescaped template with a `for` loop. Each variant is checked
 against independently escaped expected HTML before timing.
 
-htmpy escapes text with one `str.replace` pass per special character that is
-present, checking presence first with `in`, which uses a vectorized scan and
-skips the slower counting scan inside `str.replace` for characters that are
-absent. Jinja uses markupsafe's C extension, which escapes in a single pass, so
-text dense with special characters favors Jinja while clean text and ordinary
-prose favor htmpy. Text containing quotes is avoided because markupsafe writes
-`&#34;` and `&#39;` where htmpy leaves text quotes alone and writes `&quot;`
-and `&#x27;` in attributes. Results report UTF-8 output
+htmpy and Jinja both escape with markupsafe, so their output is identical,
+including `&#34;` and `&#39;` for quotes. htmpy calls markupsafe's C escaper
+directly for strings shorter than 64 characters, where its single pass is
+cheapest, and otherwise checks each special character with `in`, which uses a
+vectorized scan, and runs one `str.replace` pass only for the characters that are
+present. Long clean text and ordinary prose therefore cost a few scans rather
+than a per-character loop, while long text dense with special characters pays
+for several passes and trails the single C pass Jinja uses. Jinja adds its own
+per-item template overhead on top of escaping. Results report UTF-8 output
 size and median time per article across five repeats of 1,000 articles, with
 input preparation, Jinja compilation, validation, and printing excluded.

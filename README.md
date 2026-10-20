@@ -1,6 +1,7 @@
 # htmpy
 
-Write HTML in Python. Requires Python 3.14 or newer, with no runtime dependencies.
+Write HTML in Python. Requires Python 3.14 or newer; MarkupSafe is the only
+runtime dependency.
 Pass child elements or text positionally and attributes as keywords.
 
 ```python
@@ -33,7 +34,8 @@ For custom tags, import `Element` and use `Element("my-widget", "Text")`.
 Void elements such as `meta`, `link`, and `input` do not accept children.
 
 Children can be text, integers, elements, fragments, or nested lists and tuples.
-`None` is ignored. Text and attribute values are escaped automatically:
+`None` is ignored. Text and attribute values are escaped automatically, writing
+`&amp;`, `&lt;`, `&gt;`, `&#34;`, and `&#39;` as MarkupSafe does:
 
 ```python
 from htmpy import p

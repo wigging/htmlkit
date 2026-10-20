@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.14"
 
 [[package]]
@@ -364,6 +364,9 @@ wheels = [
 name = "htmpy"
 version = "0.1"
 source = { editable = "." }
+dependencies = [
+    { name = "markupsafe" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -375,6 +378,7 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [{ name = "markupsafe", specifier = ">=3.0.4" }]
 
 [package.metadata.requires-dev]
 dev = [

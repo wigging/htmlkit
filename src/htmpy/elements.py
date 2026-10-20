@@ -6,6 +6,8 @@ from enum import Enum
 from functools import lru_cache
 from typing import Protocol, Self
 
+from markupsafe import _escape_inner
+
 
 class SupportsHtml(Protocol):
     """Objects that expose already escaped HTML through ``__html__()``."""
@@ -40,45 +42,60 @@ _VOID_TAGS = frozenset(
 )
 _new = object.__new__
 
+# Keyword argument names are almost always literals, so map each one seen to its
+# normalized, validated attribute name. A dict lookup beats an lru_cache call, and the
+# size cap bounds memory when names are generated at runtime.
+_ATTRIBUTE_NAMES: dict[str, str] = {}
+_ATTRIBUTE_NAME_LIMIT = 1024
+
 
 class _Missing(Enum):
     CHILD = 0
 
 
-@lru_cache(maxsize=256)
-def _valid_attribute_name(name: str) -> bool:
-    return _ATTRIBUTE_NAME.fullmatch(name) is not None
+_MISSING = _Missing.CHILD
 
 
-# Text is escaped inline on the hot paths below rather than through html.escape: the
-# membership checks use a vectorized scan and skip the slower str.replace counting
-# scan for characters that are absent, and avoiding the call matters per element.
-def _escape_attribute(value: str) -> str:
-    """Escape an attribute value, including both quote characters."""
-    if "&" in value:
-        value = value.replace("&", "&amp;")
-    if "<" in value:
-        value = value.replace("<", "&lt;")
-    if ">" in value:
-        value = value.replace(">", "&gt;")
-    if '"' in value:
-        value = value.replace('"', "&quot;")
-    if "'" in value:
-        value = value.replace("'", "&#x27;")
-    return value
+def _attribute_name(keyword: str) -> str:
+    """Normalize a keyword into an attribute name, validating and caching it."""
+    name = keyword.removesuffix("_").replace("_", "-")
+    if not _ATTRIBUTE_NAME.fullmatch(name):
+        raise ValueError(f"Invalid HTML attribute name: {name!r}")
+    if len(_ATTRIBUTE_NAMES) < _ATTRIBUTE_NAME_LIMIT:
+        _ATTRIBUTE_NAMES[keyword] = name
+    return name
+
+
+# markupsafe's C escaper visits every character once, which wins for short strings and
+# for text dense with special characters. For longer text the ``in`` checks use a
+# vectorized scan and skip str.replace for characters that are absent, so clean prose
+# costs a few scans rather than a per-character loop. The threshold is the measured
+# crossover for clean text on CPython 3.14.
+_LONG_TEXT = 64
+
+
+def _escape(text: str) -> str:
+    """Escape ``&``, ``<``, ``>``, ``"``, and ``'`` as markupsafe does."""
+    if len(text) < _LONG_TEXT:
+        return _escape_inner(text)
+    if "&" in text:
+        text = text.replace("&", "&amp;")
+    if "<" in text:
+        text = text.replace("<", "&lt;")
+    if ">" in text:
+        text = text.replace(">", "&gt;")
+    if '"' in text:
+        text = text.replace('"', "&#34;")
+    if "'" in text:
+        text = text.replace("'", "&#39;")
+    return text
 
 
 def _render_child(child: Child) -> str:
     if type(child) is Element:
         return child._html
     if type(child) is str:
-        if "&" in child:
-            child = child.replace("&", "&amp;")
-        if "<" in child:
-            child = child.replace("<", "&lt;")
-        if ">" in child:
-            child = child.replace(">", "&gt;")
-        return child
+        return _escape(child)
     if child is None:
         return ""
     if type(child) is int:
@@ -161,7 +178,14 @@ class Fragment(_Markup):
     @classmethod
     def from_iterable(cls, children: Iterable[Child], /) -> Self:
         """Immediately consume children and snapshot their escaped HTML."""
-        return cls._from_rendered("".join([_render_child(child) for child in children]))
+        return cls._from_rendered(
+            "".join(
+                [
+                    child._html if type(child) is Element else _render_child(child)
+                    for child in children
+                ]
+            )
+        )
 
     @classmethod
     def _from_rendered(cls, rendered: str) -> Self:
@@ -179,12 +203,13 @@ class _Tag:
     """A validated tag name with its attributes and rendered opening and closing tags."""
 
     # Slots read faster than named tuple fields on the element construction path.
+    # The attributes dict is shared between elements and never mutated after creation.
     __slots__ = ("attributes", "closing", "name", "opening")
 
     def __init__(
         self,
         name: str,
-        attributes: tuple[tuple[str, Attribute], ...],
+        attributes: dict[str, Attribute],
         opening: str,
         closing: str,
     ) -> None:
@@ -201,7 +226,7 @@ def _definition(tag: str) -> _Tag:
         raise ValueError(f"Invalid HTML tag name: {tag!r}")
     doctype = "<!doctype html>" if tag == "html" else ""
     closing = "" if tag in _VOID_TAGS else f"</{tag}>"
-    return _Tag(tag, (), f"{doctype}<{tag}>", closing)
+    return _Tag(tag, {}, f"{doctype}<{tag}>", closing)
 
 
 def _element[E: Element](cls: type[E], tag: _Tag, html: str) -> E:
@@ -265,7 +290,7 @@ class Element(_Markup):
 
     def __call__(
         self,
-        first: Child | _Missing = _Missing.CHILD,
+        first: Child | _Missing = _MISSING,
         /,
         *children: Child,
         **attributes: Attribute,
@@ -279,15 +304,9 @@ class Element(_Markup):
         closing = definition.closing
         if not children and not attributes and closing:
             if type(first) is str:
-                if "&" in first:
-                    first = first.replace("&", "&amp;")
-                if "<" in first:
-                    first = first.replace("<", "&lt;")
-                if ">" in first:
-                    first = first.replace(">", "&gt;")
                 element = _new(type(self))
                 element._tag = definition
-                element._html = f"{definition.opening}{first}{closing}"
+                element._html = f"{definition.opening}{_escape(first)}{closing}"
                 element._count = 0
                 return element
             if type(first) is Element:
@@ -316,57 +335,60 @@ class Element(_Markup):
                 element._html = f"{definition.opening}{first}{closing}"
                 element._count = 0
                 return element
-        arguments = children if first is _Missing.CHILD else (first, *children)
         if attributes:
-            updates: dict[str, Attribute] = {}
-            for name, value in attributes.items():
-                name = name.removesuffix("_").replace("_", "-")
-                if name in updates:
-                    raise TypeError(f"Duplicate HTML attribute: {name!r}")
-                updates[name] = value
-            merged = dict(definition.attributes)
-            merged.update(updates)
-            normalized = tuple(merged.items())
-            parts = []
-            for name, value in normalized:
-                valid = (
-                    _valid_attribute_name(name)
-                    if type(name) is str
-                    else _ATTRIBUTE_NAME.fullmatch(name)
-                )
-                if not valid:
-                    raise ValueError(f"Invalid HTML attribute name: {name!r}")
+            names = _ATTRIBUTE_NAMES
+            merged: dict[str, Attribute] = {}
+            for keyword, value in attributes.items():
+                name = names.get(keyword)
+                if name is None:
+                    name = _attribute_name(keyword)
+                merged[name] = value
+            if len(merged) != len(attributes):
+                # Two keywords collapsed onto one name; find it for the error message.
+                seen: set[str] = set()
+                for keyword in attributes:
+                    name = _attribute_name(keyword)
+                    if name in seen:
+                        raise TypeError(f"Duplicate HTML attribute: {name!r}")
+                    seen.add(name)
+            base = definition.attributes
+            if base:
+                merged = base | merged
+            tag = definition.name
+            # Grow the opening tag in place; for a handful of attributes this beats
+            # collecting parts and joining them.
+            opening = f"<!doctype html><{tag}" if tag == "html" else f"<{tag}"
+            for name, value in merged.items():
                 if value is None or value is False:
                     continue
                 if value is True:
-                    parts.append(f" {name}")
+                    opening = f"{opening} {name}"
                 elif type(value) is str:
-                    parts.append(f' {name}="{_escape_attribute(value)}"')
+                    opening = f'{opening} {name}="{_escape(value)}"'
                 elif isinstance(value, (str, int)):
-                    parts.append(f' {name}="{_escape_attribute(str(value))}"')
+                    opening = f'{opening} {name}="{_escape(str(value))}"'
                 else:
                     raise TypeError(f"Unsupported HTML attribute value: {type(value).__name__}")
-            name = definition.name
-            doctype = "<!doctype html>" if name == "html" else ""
             # Fill the slots directly; calling _Tag.__init__ costs as much as the rest.
             definition = _new(_Tag)
-            definition.name = name
-            definition.attributes = normalized
-            definition.opening = f"{doctype}<{name}{''.join(parts)}>"
+            definition.name = tag
+            definition.attributes = merged
+            definition.opening = f"{opening}>"
             definition.closing = closing
-        if not closing and arguments:
-            raise ValueError(f"The {definition.name} element cannot have children")
-        if not arguments:
+        # A missing first child means no positional children at all.
+        if first is _MISSING:
             content = ""
-        elif len(arguments) == 1:
-            content = _render_child(arguments[0])
-        else:
+        elif not closing:
+            raise ValueError(f"The {definition.name} element cannot have children")
+        elif children:
             content = "".join(
                 [
                     child._html if type(child) is Element else _render_child(child)
-                    for child in arguments
+                    for child in (first, *children)
                 ]
             )
+        else:
+            content = first._html if type(first) is Element else _render_child(first)
         element = _new(type(self))
         element._tag = definition
         element._html = f"{definition.opening}{content}{closing}" if closing else definition.opening
@@ -380,16 +402,7 @@ class Element(_Markup):
             raise ValueError(f"The {definition.name} element cannot have children")
         contents = []
         for item in items:
-            if type(item) is str:
-                if "&" in item:
-                    item = item.replace("&", "&amp;")
-                if "<" in item:
-                    item = item.replace("<", "&lt;")
-                if ">" in item:
-                    item = item.replace(">", "&gt;")
-                contents.append(item)
-            else:
-                contents.append(_render_child(item))
+            contents.append(_escape(item) if type(item) is str else _render_child(item))
         if not contents:
             return Fragment._from_rendered("")
         opening, closing = definition.opening, definition.closing

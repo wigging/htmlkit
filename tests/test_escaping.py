@@ -9,14 +9,18 @@ from htmpy import Fragment, Raw, li, p, script, ul
 
 def test_escaping():
     """Verify text and attribute escaping without double-escaping nested elements."""
-    assert str(p("雪 & <tag> \"'")) == "<p>雪 &amp; &lt;tag&gt; \"'</p>"
+    assert str(p("雪 & <tag> \"'")) == "<p>雪 &amp; &lt;tag&gt; &#34;&#39;</p>"
+    # Long text takes a different escaping path and must produce the same entities.
+    phrase = "She said \"A & B\" <twice> and 'left'. "
+    escaped = "She said &#34;A &amp; B&#34; &lt;twice&gt; and &#39;left&#39;. "
+    assert str(p(phrase * 4, title=phrase * 4)) == f'<p title="{escaped * 4}">{escaped * 4}</p>'
     child = li("<one> & two")
     assert str(ul([child, str(child)])) == (
         "<ul><li>&lt;one&gt; &amp; two</li>"
         "&lt;li&gt;&amp;lt;one&amp;gt; &amp;amp; two&lt;/li&gt;</ul>"
     )
     assert str(p("<script>alert('x')</script> &", title="\"<&'")) == (
-        "<p title=\"&quot;&lt;&amp;&#x27;\">&lt;script&gt;alert('x')&lt;/script&gt; &amp;</p>"
+        '<p title="&#34;&lt;&amp;&#39;">&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt; &amp;</p>'
     )
     with pytest.raises(ValueError):
         p(**{'x="injected"': "value"})

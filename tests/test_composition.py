@@ -54,10 +54,10 @@ def test_repeat():
     items.clear()
     nested.clear()
     expected = (
-        '<li class="a&amp;&quot;b">&lt;one&gt; "\' &amp;</li>'
-        '<li class="a&amp;&quot;b">0</li>'
-        '<li class="a&amp;&quot;b"></li>'
-        '<li class="a&amp;&quot;b">雪 &amp; <p>&lt;inside&gt;</p></li>'
+        '<li class="a&amp;&#34;b">&lt;one&gt; &#34;&#39; &amp;</li>'
+        '<li class="a&amp;&#34;b">0</li>'
+        '<li class="a&amp;&#34;b"></li>'
+        '<li class="a&amp;&#34;b">雪 &amp; <p>&lt;inside&gt;</p></li>'
     )
     assert str(fragment) == expected
     assert str(ul(fragment)) == f"<ul>{expected}</ul>"
@@ -65,7 +65,7 @@ def test_repeat():
         f"<body>Before {expected}{expected} after</body>"
     )
     assert str(p.repeat([fragment])) == f"<p>{expected}</p>"
-    assert str(row) == '<li class="a&amp;&quot;b">replaced</li>'
+    assert str(row) == '<li class="a&amp;&#34;b">replaced</li>'
     assert str(ul(li.repeat([]))) == "<ul></ul>"
     assert str(ul(str(li.repeat(["<unsafe>"])))) == (
         "<ul>&lt;li&gt;&amp;lt;unsafe&amp;gt;&lt;/li&gt;</ul>"

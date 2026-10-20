@@ -48,7 +48,7 @@ def test_head_metadata():
     )
     assert str(page) == (
         '<!doctype html><html><head><meta charset="utf-8">'
-        '<meta name="description" content="A &amp; &quot;B&quot;">'
+        '<meta name="description" content="A &amp; &#34;B&#34;">'
         '<link rel="stylesheet" href="/style.css?a=1&amp;b=2">'
         "</head><body><p>Hello</p></body></html>"
     )

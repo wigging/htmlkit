@@ -16,12 +16,12 @@ def test_html_response(kind):
         page = Fragment(page)
     elif kind == "raw":
         page = Raw(
-            '<!doctype html><html><body><p title="&quot;café&quot;">'
+            '<!doctype html><html><body><p title="&#34;café&#34;">'
             "雪 &amp; &lt;hello&gt;</p></body></html>"
         )
     response = HTMLResponse(page, status_code=201)
     expected = (
-        '<!doctype html><html><body><p title="&quot;café&quot;">'
+        '<!doctype html><html><body><p title="&#34;café&#34;">'
         "雪 &amp; &lt;hello&gt;</p></body></html>"
     ).encode()
     assert response.body == expected
