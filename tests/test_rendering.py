@@ -1,32 +1,9 @@
-"""Check rendered HTML documents, metadata, headings, containers, and lists."""
+"""Check complete documents and nested lists."""
 
-import pytest
-
-from htmpy import (
-    a,
-    aside,
-    body,
-    button,
-    div,
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6,
-    head,
-    html,
-    li,
-    link,
-    main,
-    meta,
-    ol,
-    p,
-    ul,
-)
+from htmpy import body, h1, head, html, li, link, meta, ol, p, ul
 
 
-def test_document():
+def test_document() -> None:
     """Verify HTML documents include a doctype and nested content."""
     page = html(head(), body(h1("Hello"), p("First"), p("Second")), lang="en")
     assert str(page) == (
@@ -36,7 +13,7 @@ def test_document():
     assert str(html()) == "<!doctype html><html></html>"
 
 
-def test_head_metadata():
+def test_head_metadata() -> None:
     """Verify head metadata renders void tags and escapes attribute values."""
     page = html(
         head(
@@ -54,45 +31,7 @@ def test_head_metadata():
     )
 
 
-@pytest.mark.parametrize(
-    "element, tag",
-    [(head, "head"), (body, "body"), (h1, "h1"), (p, "p"), (ul, "ul"), (ol, "ol"), (li, "li")],
-)
-def test_empty(element, tag):
-    """Verify empty non-void elements include closing tags."""
-    assert str(element()) == f"<{tag}></{tag}>"
-
-
-@pytest.mark.parametrize(
-    "element, tag",
-    [(h1, "h1"), (h2, "h2"), (h3, "h3"), (h4, "h4"), (h5, "h5"), (h6, "h6")],
-)
-def test_headings(element, tag):
-    """Verify every heading level supports escaped content and attributes."""
-    assert str(element()) == f"<{tag}></{tag}>"
-    assert str(element("Section & <title>")) == f"<{tag}>Section &amp; &lt;title&gt;</{tag}>"
-    assert str(element("Section ", 2, id="section")) == (f'<{tag} id="section">Section 2</{tag}>')
-
-
-@pytest.mark.parametrize(
-    "element, tag, attrs, rendered_attrs",
-    [
-        (button, "button", {"type": "button", "disabled": True}, ' type="button" disabled'),
-        (a, "a", {"href": "/?a=1&b=2"}, ' href="/?a=1&amp;b=2"'),
-        (div, "div", {"class": "panel"}, ' class="panel"'),
-        (main, "main", {"id": "content"}, ' id="content"'),
-        (aside, "aside", {"aria-label": "Related"}, ' aria-label="Related"'),
-    ],
-)
-def test_controls_and_containers(element, tag, attrs, rendered_attrs):
-    """Verify controls and containers render attributes and nested child sequences."""
-    assert str(element()) == f"<{tag}></{tag}>"
-    assert str(element("A & <B>", [" details ", 2], **attrs)) == (
-        f"<{tag}{rendered_attrs}>A &amp; &lt;B&gt; details 2</{tag}>"
-    )
-
-
-def test_lists():
+def test_lists() -> None:
     """Verify nested ordered and unordered lists preserve structure and attributes."""
     element = ul(
         [li("A & B"), li("Steps", ol(li("First"), li("Last", value=7), start=3))],

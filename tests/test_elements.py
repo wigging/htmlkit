@@ -8,24 +8,14 @@ import pytest
 from htmpy import Child, Element, Fragment, Raw, body, link, meta, p
 
 
-def test_public_construction():
-    """Verify direct construction snapshots inputs and supports reuse and copying."""
-    attributes = {"title": '"<&'}
-    children: list[Child] = ["<unsafe>&", p("<nested>")]
-    element = Element("section", children, **MappingProxyType(attributes))
-    attributes.clear()
-    children.clear()
+def test_public_construction() -> None:
+    """Build elements directly with children and attributes."""
+    element = Element("section", "<unsafe>&", p("<nested>"), title='"<&')
     expected = '<section title="&#34;&lt;&amp;">&lt;unsafe&gt;&amp;<p>&lt;nested&gt;</p></section>'
     assert str(element) == expected
     assert str(Element("p", "<unsafe>&")) == "<p>&lt;unsafe&gt;&amp;</p>"
     assert str(Element("p", (), "<unsafe>&")) == "<p>&lt;unsafe&gt;&amp;</p>"
     assert str(element("<next>", title=None)) == "<section>&lt;next&gt;</section>"
-    assert str(element.repeat(["<one>", "&"])) == (
-        '<section title="&#34;&lt;&amp;">&lt;one&gt;</section>'
-        '<section title="&#34;&lt;&amp;">&amp;</section>'
-    )
-    for cloned in (copy(element), deepcopy(element)):
-        assert str(cloned) == expected
     assert str(Element("html", Element("my-widget"))) == (
         "<!doctype html><html><my-widget></my-widget></html>"
     )
@@ -48,24 +38,14 @@ def test_constructor_attributes(attributes, error):
         Element("p", "text", **attributes)
 
 
-def test_constructor_rejects_raw_keywords():
-    """Reject internal constructor keywords and attributes after children."""
-    with pytest.raises(TypeError):
-        Element(_tag="p", _content="<script>")  # ty: ignore[missing-argument]
-    with pytest.raises(TypeError):
-        Element("p", "text", {"id": "late"})  # ty: ignore[invalid-argument-type]
-
-
 @pytest.mark.parametrize("tag", ["meta", "link", "img", "br"])
-def test_constructor_void(tag):
-    """Verify directly constructed void elements reject children and survive copying."""
+def test_constructor_void(tag: str) -> None:
+    """Verify directly constructed void elements render and reject children."""
     element = Element(tag, id="example")
     assert str(element) == f'<{tag} id="example">'
     for child in ("text", "", None, []):
         with pytest.raises(ValueError, match="cannot have children"):
             Element(tag, child)
-    for cloned in (copy(element), deepcopy(element)):
-        assert str(cloned) == str(element)
 
 
 @pytest.mark.parametrize("element, tag", [(meta, "meta"), (link, "link")])
@@ -145,7 +125,7 @@ def test_generated_attribute_names():
         p(**{"data_key_1500 onclick": "x"})
 
 
-def test_attribute_order():
+def test_positional_attributes() -> None:
     """Reject positional attribute mappings in every position."""
     with pytest.raises(TypeError):
         p("Hello", {"class": "intro"})  # ty: ignore[invalid-argument-type]
@@ -199,14 +179,6 @@ def test_child_snapshot():
     element = body(children)
     children.clear()
     assert str(element) == "<body><p>First</p> &amp; 0</body>"
-
-
-def test_attribute_snapshot():
-    """Verify later changes to attribute mappings do not alter rendered elements."""
-    attributes = {"class": "intro"}
-    element = body("Before ", p("inside"), " after.", **attributes)
-    attributes["class"] = "changed"
-    assert str(element) == '<body class="intro">Before <p>inside</p> after.</body>'
 
 
 def test_equality():

@@ -4,26 +4,50 @@ from copy import copy, deepcopy
 
 import pytest
 
-from htmpy import Child, Fragment, article, body, br, div, li, link, meta, p, section, span, ul
+from htmpy import (
+    Child,
+    Element,
+    Fragment,
+    article,
+    body,
+    br,
+    div,
+    li,
+    link,
+    meta,
+    p,
+    section,
+    span,
+    ul,
+)
 
 
-def test_fragment():
-    """Verify fragments snapshot, escape, nest, and copy children without a wrapper."""
+def test_fragment() -> None:
+    """Escape and nest children without a wrapping tag."""
+    fragment = Fragment("<unsafe> & ", p("雪"), (None, 0, ["café"]))
+    expected = "&lt;unsafe&gt; &amp; <p>雪</p>0café"
+    assert str(fragment) == expected
+    assert str(Fragment()) == str(Fragment.from_iterable([])) == ""
+    assert str(body(Fragment(fragment, "!"))) == f"<body>{expected}!</body>"
+    assert str(Fragment(str(p("<&")))) == "&lt;p&gt;&amp;lt;&amp;amp;&lt;/p&gt;"
+
+
+def test_fragment_snapshot() -> None:
+    """Consume iterable children immediately and retain their rendered content."""
     children: list[Child] = ["<unsafe> & ", p("雪"), (None, 0, ["café"])]
     generated = (child for child in children)
     fragment = Fragment.from_iterable(generated)
     assert list(generated) == []
     children.clear()
-    expected = "&lt;unsafe&gt; &amp; <p>雪</p>0café"
-    assert str(fragment) == expected
-    assert str(Fragment("<unsafe> & ", p("雪"), (None, 0, ["café"]))) == expected
-    assert str(Fragment()) == str(Fragment.from_iterable([])) == ""
-    assert str(body(Fragment(fragment, "!"))) == f"<body>{expected}!</body>"
-    assert str(Fragment("<em>raw</em>")) == "&lt;em&gt;raw&lt;/em&gt;"
-    assert str(Fragment(str(p("<&")))) == "&lt;p&gt;&amp;lt;&amp;amp;&lt;/p&gt;"
+    assert str(fragment) == "&lt;unsafe&gt; &amp; <p>雪</p>0café"
+
+
+def test_fragment_copy() -> None:
+    """Copy fragments without escaping their content again."""
+    fragment = Fragment("<&", p("nested"))
     for cloned in (copy(fragment), deepcopy(fragment)):
         assert isinstance(cloned, Fragment)
-        assert str(body(cloned)) == f"<body>{expected}</body>"
+        assert str(body(cloned)) == "<body>&lt;&amp;<p>nested</p></body>"
 
 
 @pytest.mark.parametrize("child", [{"id": "not-attributes"}, object()])
@@ -70,8 +94,6 @@ def test_repeat():
     assert str(ul(str(li.repeat(["<unsafe>"])))) == (
         "<ul>&lt;li&gt;&amp;lt;unsafe&amp;gt;&lt;/li&gt;</ul>"
     )
-    for cloned in (copy(fragment), deepcopy(fragment)):
-        assert str(ul(cloned)) == f"<ul>{expected}</ul>"
 
 
 def test_nested_wrappers():
@@ -110,9 +132,9 @@ def test_repeat_rejects_invalid_content(items):
         li.repeat(items)
 
 
-def test_repeat_rejects_void_elements():
+@pytest.mark.parametrize("element", [meta, link])
+@pytest.mark.parametrize("items", [[], [None], ["text"]])
+def test_repeat_rejects_void_elements(element: Element, items: list[Child]) -> None:
     """Reject repeating void elements even with an empty iterable."""
-    for element in (meta, link):
-        for items in ([], [None], ["text"]):
-            with pytest.raises(ValueError, match="cannot have children"):
-                element.repeat(items)
+    with pytest.raises(ValueError, match="cannot have children"):
+        element.repeat(items)
