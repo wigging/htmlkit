@@ -98,12 +98,15 @@ def test_keyword_attributes(element, attrs, expected):
 
 
 def test_attributes():
-    """Verify normalized names and string, integer, boolean, and null values."""
+    """Verify normalized names and string, numeric, boolean, and null values."""
     assert (
         str(p(class_="intro", data_id=7, hidden=True, title=None, inert=False))
         == '<p class="intro" data-id="7" hidden></p>'
     )
     assert str(p(tabindex=0)) == '<p tabindex="0"></p>'
+    assert str(Element("input", type_="number", min=-2.5, max=0.0, step=0.01)) == (
+        '<input type="number" min="-2.5" max="0.0" step="0.01">'
+    )
     assert str(p(for_="field", aria_label="Name")) == '<p for="field" aria-label="Name"></p>'
     assert str(p("Hello")) == "<p>Hello</p>"
     assert str(Element("p", "Hi", tag="custom", first="one", children="two")) == (
@@ -111,6 +114,24 @@ def test_attributes():
     )
     with pytest.raises(TypeError, match="Duplicate HTML attribute"):
         p(class_="one", **{"class": "two"})
+
+
+@pytest.mark.parametrize(
+    "name, normalized", [("ID", "id"), ("Class_", "class"), ("DATA_Key", "data-key")]
+)
+def test_attribute_case(name: str, normalized: str) -> None:
+    """Normalize ASCII case for rendering, collisions, and inherited updates."""
+    base = p("Original", **{name: "old", "title": "kept"})
+    expected = f'<p {normalized}="old" title="kept">Original</p>'
+    assert str(base) == expected
+    with pytest.raises(TypeError, match="Duplicate HTML attribute"):
+        p(**{name: "old", normalized: "new"})
+    assert str(base("Changed", **{normalized: "new"})) == (
+        f'<p {normalized}="new" title="kept">Changed</p>'
+    )
+    for omitted in (None, False):
+        assert str(base(**{normalized: omitted})) == '<p title="kept"></p>'
+    assert str(base) == expected
 
 
 def test_generated_attribute_names():

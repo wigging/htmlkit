@@ -18,7 +18,7 @@ class SupportsHtml(Protocol):
 
 
 type Child = str | int | SupportsHtml | None | list[Child] | tuple[Child, ...]
-type Attribute = str | int | bool | None
+type Attribute = str | int | float | bool | None
 
 _ATTRIBUTE_NAME = re.compile(r"[A-Za-z_:][A-Za-z0-9_.:-]*")
 _TAG_NAME = re.compile(r"[a-z][a-z0-9-]*")
@@ -61,6 +61,7 @@ def _attribute_name(keyword: str) -> str:
     name = keyword.removesuffix("_").replace("_", "-")
     if not _ATTRIBUTE_NAME.fullmatch(name):
         raise ValueError(f"Invalid HTML attribute name: {name!r}")
+    name = name.lower()
     if len(_ATTRIBUTE_NAMES) < _ATTRIBUTE_NAME_LIMIT:
         _ATTRIBUTE_NAMES[keyword] = name
     return name
@@ -298,7 +299,8 @@ class Element(_Markup):
         """Replace children and merge keyword attributes.
 
         Attribute names lose one trailing underscore and replace remaining
-        underscores with hyphens, such as ``class_`` and ``aria_label``.
+        underscores with hyphens, such as ``class_`` and ``aria_label``, then
+        become lowercase.
         """
         definition = self._tag
         closing = definition.closing
@@ -365,7 +367,7 @@ class Element(_Markup):
                     opening = f"{opening} {name}"
                 elif type(value) is str:
                     opening = f'{opening} {name}="{_escape(value)}"'
-                elif isinstance(value, (str, int)):
+                elif isinstance(value, (str, int, float)):
                     opening = f'{opening} {name}="{_escape(str(value))}"'
                 else:
                     raise TypeError(f"Unsupported HTML attribute value: {type(value).__name__}")
