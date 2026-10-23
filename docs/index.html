@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="htmpy documentation. Write HTML in Python.">
+  <title>htmpy — Write HTML in Python</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@6.0.0-alpha.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-B/GM4XqrwHnWXNOWMbloTmrYXZg10cakYGmpfsR/bbzQ6JAJI4ihuyADKLnBgrCe" crossorigin="anonymous">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0/styles/tokyo-night-dark.min.css" rel="stylesheet">
+  <style>
+    body { margin: 0; background: var(--bs-bg-body); color: var(--bs-fg-body); font-family: Arial, sans-serif; }
+    main { width: 100%; max-width: 1020px; margin: 0 auto; padding: 56px 72px; }
+    header { padding-bottom: 40px; }
+    h1, h2 { font-family: ui-monospace, monospace; color: var(--bs-violet-300); }
+    h1 { font-size: 62px; font-weight: 700; letter-spacing: -3px; margin-bottom: 8px; }
+    .slogan { color: var(--bs-fg-2); font-size: 24px; margin: 0; }
+    section { margin-bottom: 3rem; scroll-margin-top: 24px; }
+    h2 { display: flex; align-items: baseline; gap: 12px; font-size: 21px; font-weight: 600; margin-bottom: 12px; letter-spacing: -.5px; }
+    h2 .bi { flex-shrink: 0; }
+    section p { color: var(--bs-fg-2); max-width: 80ch; line-height: 1.75; margin: 0; }
+    pre { border-radius: 6px; margin: 16px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    pre code.hljs { border-radius: inherit; padding: 16px; }
+    footer { padding-top: 20px; color: var(--bs-fg-2); font-size: 12px; }
+    @media (max-width: 700px) {
+      main { padding: 28px 20px; }
+      h1 { font-size: 42px; letter-spacing: -2px; }
+      .slogan { font-size: 19px; }
+      h2 { font-size: 22px; }
+      section p { font-size: 14px; }
+      section { padding: 20px 14px; }
+    }
+  </style>
+</head>
+<body>
+  <main id="main">
+    <header>
+      <h1>htmpy</h1>
+      <p class="slogan">Write HTML in Python</p>
+    </header>
+    <section id="installation" aria-labelledby="installation-title">
+      <h2 id="installation-title"><i class="bi bi-terminal" aria-hidden="true"></i>Installation</h2>
+      <p>htmpy requires Python 3.14 or newer. From your project's directory, add htmpy with uv:</p>
+      <pre><code class="language-bash">uv add htmpy</code></pre>
+      <p>Starting a new project? Create one with Python 3.14, then add htmpy:</p>
+      <pre><code class="language-bash">uv init --python 3.14 my-project
+cd my-project
+uv add htmpy</code></pre>
+      <p>uv creates the project's virtual environment and installs htmpy and its dependencies.</p>
+    </section>
+    <section id="getting-started" aria-labelledby="getting-started-title">
+      <h2 id="getting-started-title"><i class="bi bi-file-earmark-text" aria-hidden="true"></i>Getting Started</h2>
+      <p>Create HTML by nesting Python objects. Pass child elements or text as positional arguments and HTML attributes as keyword arguments. Save this example as <code>page.py</code>:</p>
+      <pre><code class="language-python">import htmpy
+
+page = htmpy.html(
+    htmpy.head(htmpy.title("Hello")),
+    htmpy.body(
+        htmpy.h1("Hello, world!"),
+        htmpy.p("Built with htmpy."),
+    ),
+    lang="en",
+)
+
+print(page)</code></pre>
+      <p>Run it with uv to print the HTML, including the HTML5 doctype:</p>
+      <pre><code class="language-bash">uv run page.py</code></pre>
+      <p>To view the page in a browser, save the output to an HTML file and open it:</p>
+      <pre><code class="language-bash">uv run page.py &gt; index.html</code></pre>
+    </section>
+    <section id="examples" aria-labelledby="examples-title">
+      <h2 id="examples-title"><i class="bi bi-code-slash" aria-hidden="true"></i>Examples</h2>
+      <p>See the pieces come together. This section will include small, practical examples, from a simple list to a complete page built with htmpy.</p>
+    </section>
+    <footer>htmpy documentation · Content coming soon</footer>
+  </main>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
