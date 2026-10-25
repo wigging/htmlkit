@@ -93,16 +93,26 @@ version. These are eager renders, not streaming or peak-memory measurements.
 uv run benchmarks/nested.py
 ```
 
-Builds a fresh paragraph inside 10, 32, and 100 nested `div` elements, using
-both a short text payload and a payload 256 times larger. Each render includes
+Builds a fresh paragraph inside 10, 32, and 100 nested wrappers, using
+both a short text payload and a payload 256 times larger. Four shapes are measured:
+
+- Identical bare `div` wrappers, preserving the original baseline.
+- Alternating bare `div` and `section` wrappers.
+- Alternating wrappers with a fresh `data-level` attribute at every level.
+- Alternating wrappers with a trailing `span` containing the level number.
+
+Levels count outward from zero around the paragraph. Attributes and siblings
+are separate cases so their costs can be distinguished. Each render includes
 escaping the paragraph text, constructing every wrapper, and returning the
 complete HTML string. No intermediate elements are retained after their parent
 is constructed. Real documents rarely nest deeper than 32 elements, the depth
 Lighthouse flags as excessive, so 100 is a stress case rather than a target.
 
 The Jinja path uses a compiled, autoescaped template with loops that emit the
-opening wrappers, the escaped paragraph, and the closing wrappers. It produces
-the same nested HTML without recursive macros or repeated subtree construction.
+opening wrappers, the escaped paragraph, and the closing wrappers. The mixed
+template also selects alternating tags and emits attributes or siblings as needed.
+It produces the same nested HTML without recursive macros or repeated subtree
+construction.
 This compares complete output generation, not equivalent component-call trees.
 Template compilation is excluded from both time and memory measurements, as in
 the other benchmarks; no completed output is cached.
@@ -123,11 +133,14 @@ over the render's lifetime.
 When an element wraps a single element with the same tag, or wraps such a run,
 htmpy stores a reference to the child and a run count instead of copying the
 child's rendered HTML, then renders the chain once when the HTML is first read.
-A chain of depth d around an escaped payload of length n therefore costs
+The identical-tag chain of depth d around an escaped payload of length n costs
 O(d + n) copying and live storage, rather than O(d² + d·n) copying. Wrapping a
 single element with a different tag, such as `li(a(...))`, copies eagerly,
-because that is cheaper than materializing a one-level chain later.
-The remaining per-level cost is one Python call and one object allocation,
+because that is cheaper than materializing a one-level chain later. The mixed
+cases do not start an identical-tag run, so they expose repeated copying of
+the growing subtree. Peak live memory does not measure cumulative copying.
+For the identical-tag baseline, the remaining per-level cost is one Python call
+and one object allocation,
 which is the floor for this API: on CPython 3.14 that is about 0.1 µs per
 level, while Jinja's compiled loop emits each wrapper in about 0.05 µs. htmpy
 therefore wins at depths typical of real documents, where its fixed cost is
@@ -177,17 +190,23 @@ cost outside the timed render.
 uv run benchmarks/escaping.py
 ```
 
-Renders an article with a heading and 50 paragraphs of 600 characters each,
-so escaping long text dominates the work rather than element construction.
-Four text variants exercise the different escaping paths: ASCII with no
-special characters, English prose with an occasional `&`, ASCII where about
-15% of the characters are `&`, `<`, or `>`, and non-ASCII text with the same
-dense special characters. The **htmpy** path builds a `p` element per
-paragraph, **htmpy repeat** uses `p.repeat(paragraphs)`, and **Jinja** renders a
+Renders an article with a heading and 50 paragraphs, sweeping exact paragraph
+lengths of 16, 63, 64, 65, 256, and 600 characters. The 63/64/65 cases bracket
+the escaping implementation's 64-character threshold. Text is repeated and
+truncated without adding index prefixes or trimming whitespace, so the printed
+character count is the actual length passed to the escaper, not its UTF-8 size.
+Short cases include element-construction overhead; these are complete article
+benchmarks, not isolated escaper timings.
+
+Six text variants cover clean ASCII, clean Unicode, prose with an occasional
+`&`, ASCII and non-ASCII text dense with `&`, `<`, and `>`, and text containing
+all five escaped characters (`&`, `<`, `>`, double quote, and apostrophe).
+The **htmpy** path builds a `p` element per paragraph, **htmpy repeat** uses
+`p.repeat(paragraphs)`, and **Jinja** renders a
 compiled, autoescaped template with a `for` loop. Each variant is checked
 against independently escaped expected HTML before timing.
 
-htmpy and Jinja both escape with markupsafe, so their output is identical,
+htmpy and Jinja use the same escaping conventions, so their output is identical,
 including `&#34;` and `&#39;` for quotes. htmpy calls markupsafe's C escaper
 directly for strings shorter than 64 characters, where its single pass is
 cheapest, and otherwise checks each special character with `in`, which uses a

@@ -1,4 +1,4 @@
-"""Compare escaping of long text content in htmpy with a compiled Jinja template."""
+"""Compare short and long text escaping in htmpy with a compiled Jinja template."""
 
 from functools import partial
 from statistics import median
@@ -9,12 +9,14 @@ from jinja2 import Environment
 from htmpy import article, h1, p
 
 PARAGRAPH_COUNT = 50
-PARAGRAPH_LENGTH = 600
+PARAGRAPH_LENGTHS = (16, 63, 64, 65, 256, 600)
 TEXTS = {
     "ASCII, no specials": "The quick brown fox jumps over the lazy dog. ",
+    "Unicode, no specials": "Café crème — 雪 et 雨. ",
     "Prose, occasional &": "Smith & Sons sell fish and chips on the square every Saturday. ",
     "ASCII with & < >": "Fish & chips <are> tasty, 1 < 2 & 3 > 2. ",
     "Non-ASCII with & < >": "Café & crème <brûlée> — 雪 & 雨. ",
+    "All five specials": "&<>\"' café 雪. ",
 }
 TITLE = "Escaping & <markup>"
 TEMPLATE = Environment(autoescape=True).from_string(
@@ -25,10 +27,10 @@ NUMBER = 1_000
 REPEAT = 5
 
 
-def paragraphs(phrase: str) -> list[str]:
-    """Return paragraphs built by repeating the phrase to the paragraph length."""
-    text = (phrase * (PARAGRAPH_LENGTH // len(phrase) + 1))[:PARAGRAPH_LENGTH].rstrip()
-    return [f"{index}: {text}" for index in range(PARAGRAPH_COUNT)]
+def paragraphs(phrase: str, length: int) -> list[str]:
+    """Return paragraphs of exactly length characters, including whitespace."""
+    text = (phrase * (length // len(phrase) + 1))[:length]
+    return [text for _ in range(PARAGRAPH_COUNT)]
 
 
 def render_htmpy(texts: list[str]) -> str:
@@ -48,12 +50,23 @@ def render_jinja(texts: list[str]) -> str:
 
 def main() -> None:
     """Validate escaped output and report median rendering times per text variant."""
-    variants = {name: paragraphs(phrase) for name, phrase in TEXTS.items()}
+    variants = {
+        (name, length): paragraphs(phrase, length)
+        for length in PARAGRAPH_LENGTHS
+        for name, phrase in TEXTS.items()
+    }
 
     # Check the rendered HTML to make sure htmpy and Jinja create the same output
-    for texts in variants.values():
+    for (_, length), texts in variants.items():
+        assert len(texts) == PARAGRAPH_COUNT
+        assert all(len(text) == length for text in texts)
         escaped = [
-            text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") for text in texts
+            text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&#34;")
+            .replace("'", "&#39;")
+            for text in texts
         ]
 
         expected = (
@@ -65,8 +78,8 @@ def main() -> None:
         assert render_htmpy(texts) == render_htmpy_repeat(texts) == render_jinja(texts) == expected
 
     print(
-        f"{REPEAT} repeats of {NUMBER:,} articles with {PARAGRAPH_COUNT} paragraphs of "
-        f"{PARAGRAPH_LENGTH} characters; median time per article"
+        f"{REPEAT} repeats of {NUMBER:,} articles with {PARAGRAPH_COUNT} paragraphs; "
+        "median time per article"
     )
 
     print("Input preparation and Jinja compilation excluded; autoescaping enabled.")
@@ -77,9 +90,11 @@ def main() -> None:
         ("Jinja", render_jinja),
     )
 
-    print(f"\n{'Text':22}{'Output':>10}" + "".join(f"{name:>16}" for name, _ in renderers))
+    print(
+        f"\n{'Text':22}{'Chars':>7}{'Output':>10}" + "".join(f"{name:>16}" for name, _ in renderers)
+    )
 
-    for name, texts in variants.items():
+    for (name, length), texts in variants.items():
         size = len(render_jinja(texts).encode())
         timings = []
 
@@ -88,7 +103,8 @@ def main() -> None:
             timings.append(seconds * 1_000_000)
 
         print(
-            f"{name:22}{size / 1_000:8.1f} KB" + "".join(f"{timing:13.2f} µs" for timing in timings)
+            f"{name:22}{length:7}{size / 1_000:8.1f} KB"
+            + "".join(f"{timing:13.2f} µs" for timing in timings)
         )
 
 

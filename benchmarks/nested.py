@@ -7,7 +7,7 @@ from timeit import repeat
 
 from jinja2 import Environment
 
-from htmpy import div, p
+from htmpy import div, p, section, span
 
 DEPTHS = (10, 32, 100)
 PAYLOAD_REPEATS = (1, 256)
@@ -20,6 +20,15 @@ TEMPLATE = Environment(autoescape=True).from_string(
     "<p>{{ text }}</p>"
     "{% for _ in range(depth) %}</div>{% endfor %}"
 )
+MIXED_TEMPLATE = Environment(autoescape=True).from_string(
+    "{% for level in range(depth - 1, -1, -1) %}"
+    "{% if level % 2 %}<section{% else %}<div{% endif %}"
+    '{% if attributed %} data-level="{{ level }}"{% endif %}>{% endfor %}'
+    "<p>{{ text }}</p>"
+    "{% for level in range(depth) %}"
+    "{% if siblings %}<span>{{ level }}</span>{% endif %}"
+    "{% if level % 2 %}</section>{% else %}</div>{% endif %}{% endfor %}"
+)
 
 
 def render_nested(depth: int, text: str) -> str:
@@ -27,6 +36,20 @@ def render_nested(depth: int, text: str) -> str:
     element = p(text)
     for _ in range(depth):
         element = div(element)
+    return str(element)
+
+
+def render_mixed(depth: int, text: str, *, attributed: bool, siblings: bool) -> str:
+    """Alternate wrapper tags, optionally adding attributes or trailing siblings."""
+    element = p(text)
+    for level in range(depth):
+        wrapper = section if level % 2 else div
+        if attributed:
+            element = wrapper(element, data_level=level)
+        elif siblings:
+            element = wrapper(element, span(level))
+        else:
+            element = wrapper(element)
     return str(element)
 
 
@@ -40,15 +63,49 @@ def main() -> None:
         f"{'Renderer':8} {'Text chars':>10} {'Depth':>7} {'Output bytes':>13} "
         f"{'µs/render':>12} {'Peak KiB':>12}"
     )
+    for variant in ("Identical tags", "Mixed tags", "Mixed with attributes", "Mixed with siblings"):
+        print(f"\n{variant}")
+        _measure(variant)
+
+
+def _measure(variant: str) -> None:
+    """Validate and measure each depth and payload for one nesting shape."""
+    mixed = variant != "Identical tags"
+    attributed = variant == "Mixed with attributes"
+    siblings = variant == "Mixed with siblings"
     for payload_repeats in PAYLOAD_REPEATS:
         text = TEXT * payload_repeats
         for depth in DEPTHS:
-            expected = "<div>" * depth + "<p>" + ESCAPED_TEXT * payload_repeats + "</p>"
-            expected += "</div>" * depth
+            openings = []
+            endings = []
+            for level in range(depth):
+                tag = "section" if mixed and level % 2 else "div"
+                attribute = f' data-level="{level}"' if attributed else ""
+                openings.append(f"<{tag}{attribute}>")
+                sibling = f"<span>{level}</span>" if siblings else ""
+                endings.append(f"{sibling}</{tag}>")
+            expected = "".join(reversed(openings)) + "<p>" + ESCAPED_TEXT * payload_repeats
+            expected += "</p>" + "".join(endings)
             output_bytes = len(expected.encode("utf-8"))
             renderers = (
-                ("htmpy", partial(render_nested, depth, text)),
-                ("Jinja", partial(TEMPLATE.render, depth=depth, text=text)),
+                (
+                    "htmpy",
+                    partial(render_mixed, depth, text, attributed=attributed, siblings=siblings)
+                    if mixed
+                    else partial(render_nested, depth, text),
+                ),
+                (
+                    "Jinja",
+                    partial(
+                        MIXED_TEMPLATE.render,
+                        depth=depth,
+                        text=text,
+                        attributed=attributed,
+                        siblings=siblings,
+                    )
+                    if mixed
+                    else partial(TEMPLATE.render, depth=depth, text=text),
+                ),
             )
             for _, render in renderers:
                 assert render() == expected
