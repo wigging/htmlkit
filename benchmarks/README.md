@@ -167,11 +167,13 @@ so element construction dominates rather than any single long string.
 The **htmpy fresh** path builds every element with keyword attributes on each
 render. The **htmpy reused** path prepares the static head, header, table head,
 footer, and attributed `html`, `table`, `td`, `form`, and `select` templates
-once, then builds the table body and form fields on each render. The **Jinja**
-path renders one compiled, autoescaped template with `for` loops and `if`
-conditions for the same context. Conditional attributes use `None` values in
-htmpy, which omit the attribute, and `{% if %}` blocks in Jinja. All three
-outputs must equal independently assembled expected HTML before timing.
+once, then builds the table body and form fields on each render. The **htmpy
+repeat** path is the reused page with the table rows rendered from a `tr`
+template whose cells hold `each` placeholders, filled by one `repeat()` call.
+The **Jinja** path renders one compiled, autoescaped template with `for` loops
+and `if` conditions for the same context. Conditional attributes use `None`
+values in htmpy, which omit the attribute, and `{% if %}` blocks in Jinja. All
+four outputs must equal independently assembled expected HTML before timing.
 
 Results report the median time per page across five repeats of 1,000 pages,
 with input preparation, Jinja compilation, validation, and printing excluded.
@@ -182,7 +184,11 @@ add to that: each attributed element normalizes its names through a cached
 lookup, renders the values, and allocates a new tag definition, which costs
 roughly three times as much as an element with only text. Preparing attributed
 elements once, as the reused path does with `td(class_="number")`, pays that
-cost outside the timed render.
+cost outside the timed render. A bound template removes the per-element cost
+from the rows entirely: `repeat()` compiles the template's HTML into a format
+string and one accessor per placeholder the first time it is filled, then each
+row costs its accessor calls, escaping, and a single `str.format`, which is the
+same work Jinja's compiled loop does.
 
 ## Escaping benchmark
 
@@ -191,8 +197,9 @@ uv run benchmarks/escaping.py
 ```
 
 Renders an article with a heading and 50 paragraphs, sweeping exact paragraph
-lengths of 16, 63, 64, 65, 256, and 600 characters. The 63/64/65 cases bracket
-the escaping implementation's 64-character threshold. Text is repeated and
+lengths of 16, 63, 64, 65, 256, and 600 characters. The 63/64/65 cases are
+kept from an earlier escaper that switched strategy at 64 characters, so the
+sweep still covers short, medium, and long text. Text is repeated and
 truncated without adding index prefixes or trimming whitespace, so the printed
 character count is the actual length passed to the escaper, not its UTF-8 size.
 Short cases include element-construction overhead; these are complete article
@@ -208,12 +215,13 @@ against independently escaped expected HTML before timing.
 
 htmpy and Jinja use the same escaping conventions, so their output is identical,
 including `&#34;` and `&#39;` for quotes. htmpy calls markupsafe's C escaper
-directly for strings shorter than 64 characters, where its single pass is
-cheapest, and otherwise checks each special character with `in`, which uses a
-vectorized scan, and runs one `str.replace` pass only for the characters that are
-present. Long clean text and ordinary prose therefore cost a few scans rather
-than a per-character loop, while long text dense with special characters pays
-for several passes and trails the single C pass Jinja uses. Jinja adds its own
-per-item template overhead on top of escaping. Results report UTF-8 output
+directly for every string, so escaping itself costs the same single pass in
+both libraries and the difference comes from per-paragraph overhead: a `p`
+element call and allocation in htmpy versus a loop iteration and template
+output in Jinja. One case still favors Jinja: text with all five specials at
+600 characters expands to a non-ASCII (two bytes per character) output above
+128 KB, and htmpy holds both the paragraph fragment and the finished article at
+that size, so glibc releases and re-faults heap pages between renders while
+Jinja's single join allocates only once. Results report UTF-8 output
 size and median time per article across five repeats of 1,000 articles, with
 input preparation, Jinja compilation, validation, and printing excluded.

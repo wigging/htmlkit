@@ -10,6 +10,7 @@ from htmpy import (
     a,
     body,
     button,
+    each,
     footer,
     form,
     h1,
@@ -167,6 +168,15 @@ DATA_TABLE = table(class_="data")
 NUMBER_CELL = td(class_="number")
 ITEM_FORM = form(method="post", action="/items")
 PRIORITY_SELECT = select(id="priority", name="priority")
+# A row template filled by repeat(), prepared once like the Jinja template.
+ROW = tr(
+    td(each.id),
+    td(each.name),
+    td(each.owner),
+    NUMBER_CELL(each.quantity),
+    td(each.status, class_="status " + each.status),
+    td(a("Edit", href=each.href)),
+)
 
 
 def render_htmpy_fresh() -> str:
@@ -332,6 +342,61 @@ def render_htmpy_reused() -> str:
     return str(page)
 
 
+def render_htmpy_repeat() -> str:
+    """Render the reused page with the table rows filled from a row template."""
+    priority = PRIORITY
+    rows = ROWS
+    page = PAGE(
+        HEAD,
+        body(
+            HEADER,
+            tags.main(
+                section(
+                    h2(len(rows), " items"),
+                    DATA_TABLE(
+                        TABLE_HEAD,
+                        tbody(ROW.repeat(rows)),
+                    ),
+                    id="inventory",
+                ),
+                section(
+                    h2("Add item"),
+                    ITEM_FORM(
+                        [
+                            (
+                                label(text, for_=name),
+                                input_(
+                                    type=kind,
+                                    id=name,
+                                    name=name,
+                                    value=value,
+                                    required=True,
+                                ),
+                            )
+                            for name, text, kind, value in FIELDS
+                        ],
+                        label("Priority", for_="priority"),
+                        PRIORITY_SELECT(
+                            [
+                                option(
+                                    value.capitalize(),
+                                    value=value,
+                                    selected=value == priority,
+                                )
+                                for value in PRIORITIES
+                            ]
+                        ),
+                        FORM_TAIL,
+                    ),
+                    id="new-item",
+                ),
+            ),
+            FOOTER,
+        ),
+    )
+    return str(page)
+
+
 def render_jinja() -> str:
     """Render the page using the compiled Jinja template."""
     return TEMPLATE.render(CONTEXT)
@@ -392,6 +457,7 @@ def main() -> None:
     """Validate page output and report median rendering times."""
     expected = _expected()
     assert render_htmpy_fresh() == render_htmpy_reused() == render_jinja() == expected
+    assert render_htmpy_repeat() == expected
 
     print(
         f"{REPEAT} repeats of {NUMBER:,} pages with a {ROW_COUNT}-row table and "
@@ -401,6 +467,7 @@ def main() -> None:
     for name, render in (
         ("htmpy fresh", render_htmpy_fresh),
         ("htmpy reused", render_htmpy_reused),
+        ("htmpy repeat", render_htmpy_repeat),
         ("Jinja", render_jinja),
     ):
         seconds = median(repeat(render, number=NUMBER, repeat=REPEAT)) / NUMBER

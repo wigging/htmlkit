@@ -1,6 +1,9 @@
 """Check fragment construction, nesting, snapshots, and repeated elements."""
 
 from copy import copy, deepcopy
+from operator import itemgetter
+from types import SimpleNamespace
+from typing import NamedTuple
 
 import pytest
 
@@ -8,16 +11,23 @@ from htmpy import (
     Child,
     Element,
     Fragment,
+    Raw,
+    a,
     article,
+    bind,
     body,
     br,
     div,
+    each,
+    input_,
     li,
     link,
     meta,
     p,
     section,
     span,
+    td,
+    tr,
     ul,
 )
 
@@ -138,3 +148,82 @@ def test_repeat_rejects_void_elements(element: Element, items: list[Child]) -> N
     """Reject repeating void elements even with an empty iterable."""
     with pytest.raises(ValueError, match="cannot have children"):
         element.repeat(items)
+
+
+class Item(NamedTuple):
+    """A record for template tests."""
+
+    id: int
+    name: str
+    href: str
+    active: bool
+    note: str | None
+
+
+ITEMS = [
+    Item(1, "A & <b>", "/a?x=1&y=2", True, None),
+    Item(2, "雪", "/b", False, 'say "hi"'),
+]
+
+
+def test_repeat_template() -> None:
+    """Fill bound children and attributes from each item in one call."""
+    row = tr(
+        td(each.id, class_="row " + each.name),
+        td(a(each.name, href=each.href), hidden=each(lambda item: not item.active)),
+        td(each(lambda item: item.id * 2), " {literal}", title=each.note),
+        id=each(lambda item: f"row-{item.id}"),
+    )
+    fragment = row.repeat(iter(ITEMS))
+    assert isinstance(fragment, Fragment)
+    assert str(fragment) == (
+        '<tr id="row-1"><td class="row A &amp; &lt;b&gt;">1</td>'
+        '<td><a href="/a?x=1&amp;y=2">A &amp; &lt;b&gt;</a></td>'
+        "<td>2 {literal}</td></tr>"
+        '<tr id="row-2"><td class="row 雪">2</td>'
+        '<td hidden><a href="/b">雪</a></td>'
+        '<td title="say &#34;hi&#34;">4 {literal}</td></tr>'
+    )
+    assert str(row.repeat([])) == ""
+    # Templates compose: a bound value may itself be a repeated fragment or an element.
+    groups = [("Fruit", ["Apple", "Pear & fig"]), ("Empty", [])]
+    nested = li(each[0], ul(each(lambda group: li.repeat(group[1]))))
+    assert str(ul(nested.repeat(groups))) == (
+        "<ul><li>Fruit<ul><li>Apple</li><li>Pear &amp; fig</li></ul></li>"
+        "<li>Empty<ul></ul></li></ul>"
+    )
+    assert str(p(each).repeat(["<x>", 0, None, span("y"), Raw("<i>")])) == (
+        "<p>&lt;x&gt;</p><p>0</p><p></p><p><span>y</span></p><p><i></p>"
+    )
+    assert str(p(bind()).repeat(["<x>"])) == "<p>&lt;x&gt;</p>"
+
+
+def test_repeat_template_attributes() -> None:
+    """Drop, flag, or quote whole bound attributes, including on void elements."""
+    field = input_(name=each.name, disabled=each.active, value=each.id)
+    assert str(field.repeat(ITEMS)) == (
+        '<input name="A &amp; &lt;b&gt;" disabled value="1"><input name="雪" value="2">'
+    )
+    assert str(td(each.id, title=each.note).repeat(ITEMS)) == (
+        '<td>1</td><td title="say &#34;hi&#34;">2</td>'
+    )
+    with pytest.raises(TypeError, match="Unsupported HTML attribute value"):
+        td(title=each(lambda item: [item])).repeat(ITEMS)
+
+
+def test_each_and_bind() -> None:
+    """Share placeholders per accessor and reject accessors that cannot read an item."""
+    assert each.name == bind("name") == each("name") and each.name != each.id
+    assert each[0] != each["0"] != each("0")
+    assert repr(each) == "each"
+    assert str(td(each("owner.name")).repeat([SimpleNamespace(owner=ITEMS[1])])) == "<td>雪</td>"
+    assert str(td(each[1], each["count"]).repeat([{1: "a&", "count": 3}])) == "<td>a&amp;3</td>"
+    assert str(td(each[0], bind(itemgetter(1))).repeat([("x", "y")])) == "<td>xy</td>"
+    with pytest.raises(TypeError, match="Unsupported binding accessor"):
+        bind(1.5)  # ty: ignore[invalid-argument-type]
+    with pytest.raises(AttributeError):
+        td(each.missing).repeat(ITEMS)
+    with pytest.raises(AttributeError):
+        each.__missing__  # noqa: B018
+    # A placeholder is only filled by repeat(); other renders keep it as a marker.
+    assert "\x00" in str(td(bind("id")))

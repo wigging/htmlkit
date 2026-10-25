@@ -4,9 +4,13 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from enum import Enum
 from functools import lru_cache
-from typing import Protocol, Self
+from operator import attrgetter, itemgetter
+from typing import Any, Protocol, Self
 
-from markupsafe import _escape_inner
+# markupsafe's C escaper visits every character once and returns the same object when
+# nothing needs escaping. Calling it directly costs less than any Python wrapper, and a
+# single pass never degrades on text dense with special characters.
+from markupsafe import _escape_inner as _escape
 
 
 class SupportsHtml(Protocol):
@@ -67,32 +71,176 @@ def _attribute_name(keyword: str) -> str:
     return name
 
 
-# markupsafe's C escaper visits every character once, which wins for short strings and
-# for text dense with special characters. For longer text the ``in`` checks use a
-# vectorized scan and skip str.replace for characters that are absent, so clean prose
-# costs a few scans rather than a per-character loop. The threshold is the measured
-# crossover for clean text on CPython 3.14.
-_LONG_TEXT = 64
+def _duplicate(attributes: Mapping[str, Attribute]) -> None:
+    """Raise for the first pair of keywords that normalize to the same attribute name."""
+    seen: set[str] = set()
+    for keyword in attributes:
+        name = _attribute_name(keyword)
+        if name in seen:
+            raise TypeError(f"Duplicate HTML attribute: {name!r}")
+        seen.add(name)
 
 
-def _escape(text: str) -> str:
-    """Escape ``&``, ``<``, ``>``, ``"``, and ``'`` as markupsafe does."""
-    if len(text) < _LONG_TEXT:
-        return _escape_inner(text)
-    if "&" in text:
-        text = text.replace("&", "&amp;")
-    if "<" in text:
-        text = text.replace("<", "&lt;")
-    if ">" in text:
-        text = text.replace(">", "&gt;")
-    if '"' in text:
-        text = text.replace('"', "&#34;")
-    if "'" in text:
-        text = text.replace("'", "&#39;")
-    return text
+type _Getter = Callable[[Any], object]
+
+# A placeholder renders as its registry index between NUL characters. NUL is not
+# escaped and cannot appear in valid HTML, so the marker passes unchanged through every
+# render path, which lets a template be built with the ordinary element API and compiled
+# by repeat() when it is first filled. Attribute and key accessors share one marker
+# each, so building the same template repeatedly does not grow the registry.
+_BINDINGS: list[_Getter] = [lambda item: item]
+_ATTRIBUTES: dict[str, str] = {}
+_KEYS: dict[object, str] = {}
+_MARKER = re.compile(r' ([A-Za-z_:][A-Za-z0-9_.:-]*)="\x00(\d+)\x00"|\x00(\d+)\x00')
+type _Template = tuple[Callable[..., str], list[_Getter], list[Callable[[object], str]]]
 
 
-def _render_child(child: Child) -> str:
+def _register(getter: _Getter) -> str:
+    """Add an accessor to the registry and return its placeholder."""
+    _BINDINGS.append(getter)
+    return f"\x00{len(_BINDINGS) - 1}\x00"
+
+
+def bind(accessor: str | _Getter | None = None, /) -> str:
+    """Return a placeholder that ``repeat()`` fills from each item.
+
+    A string accessor reads an attribute of the item, including dotted paths, a
+    callable receives the item and returns the value, and no accessor uses the
+    item itself. The placeholder is a string, so it works as a child, as an
+    attribute value, or inside a longer string. ``each`` offers the same
+    placeholders through attribute and item access.
+    """
+    if accessor is None:
+        return "\x000\x00"
+    if type(accessor) is str:
+        marker = _ATTRIBUTES.get(accessor)
+        if marker is None:
+            marker = _ATTRIBUTES[accessor] = _register(attrgetter(accessor))
+        return marker
+    if callable(accessor):
+        return _register(accessor)
+    raise TypeError(f"Unsupported binding accessor: {type(accessor).__name__}")
+
+
+class _Each:
+    """The item being rendered by ``repeat()``, expressed through placeholders.
+
+    ``each.name`` reads an attribute of the item, ``each[key]`` indexes it,
+    ``each(accessor)`` is ``bind(accessor)``, and ``each`` by itself is the item.
+    """
+
+    __slots__ = ()
+
+    def __getattr__(self, name: str) -> str:
+        if name.startswith("__"):
+            raise AttributeError(f"'each' object has no attribute {name!r}")
+        return bind(name)
+
+    def __getitem__(self, key: object) -> str:
+        marker = _KEYS.get(key)
+        if marker is None:
+            marker = _KEYS[key] = _register(itemgetter(key))
+        return marker
+
+    def __call__(self, accessor: str | _Getter, /) -> str:
+        return bind(accessor)
+
+    def __html__(self) -> str:
+        return "\x000\x00"
+
+    def __repr__(self) -> str:
+        return "each"
+
+
+each = _Each()
+
+
+def _binding(index: str) -> _Getter:
+    """Look up a marker's accessor, rejecting markers that no ``bind()`` call produced."""
+    try:
+        return _BINDINGS[int(index)]
+    except IndexError:
+        raise ValueError(f"Unknown binding in template: {index}") from None
+
+
+def _attribute_renderer(name: str, get: _Getter) -> Callable[[object], str]:
+    """Render a whole bound attribute per item with the same rules as ``__call__``."""
+
+    def render(item: object) -> str:
+        value = get(item)
+        if value is None or value is False:
+            return ""
+        if value is True:
+            return f" {name}"
+        if type(value) is str:
+            return f' {name}="{_escape(value)}"'
+        if isinstance(value, (str, int, float)):
+            return f' {name}="{_escape(str(value))}"'
+        raise TypeError(f"Unsupported HTML attribute value: {type(value).__name__}")
+
+    return render
+
+
+@lru_cache(maxsize=256)
+def _template(html: str) -> _Template:
+    """Split template HTML into a format string, content getters, and attribute renderers.
+
+    Content markers become the leading positional fields and whole-attribute markers
+    the trailing ones, so a fill passes two lists in that order.
+    """
+    pieces = _MARKER.split(html)
+    statics = [piece.replace("{", "{{").replace("}", "}}") for piece in pieces[0::4]]
+    getters: list[_Getter] = []
+    renderers: list[Callable[[object], str]] = []
+    # Each marker's positional field: content markers count up from zero and
+    # attribute markers continue after the last content marker, numbered negative
+    # until the content count is known.
+    fields: list[int] = []
+    for name, attribute, content in zip(pieces[1::4], pieces[2::4], pieces[3::4]):
+        if content is None:
+            renderers.append(_attribute_renderer(name, _binding(attribute)))
+            fields.append(-len(renderers))
+        else:
+            getters.append(_binding(content))
+            fields.append(len(getters) - 1)
+    offset = len(getters) - 1
+    parts = [statics[0]]
+    for field, static in zip(fields, statics[1:]):
+        parts.append(f"{{{field if field >= 0 else offset - field}}}{static}")
+    return "".join(parts).format, getters, renderers
+
+
+def _fill(template: _Template, items: Iterable[object]) -> Fragment:
+    """Render a compiled template once per item in a single pass."""
+    fmt, getters, renderers = template
+    rendered: list[str] = []
+    append = rendered.append
+    for item in items:
+        append(
+            fmt(
+                *[
+                    _escape(value) if type(value) is str else _render_child(value)
+                    for value in [get(item) for get in getters]
+                ],
+                *[render(item) for render in renderers],
+            )
+        )
+    return Fragment._from_rendered("".join(rendered))
+
+
+def _render_all(children: Iterable[Child]) -> list[str]:
+    """Render each child to escaped HTML, handling elements and text inline."""
+    return [
+        child._html
+        if type(child) is Element
+        else _escape(child)
+        if type(child) is str
+        else _render_child(child)
+        for child in children
+    ]
+
+
+def _render_child(child: object) -> str:
     if type(child) is Element:
         return child._html
     if type(child) is str:
@@ -102,9 +250,7 @@ def _render_child(child: Child) -> str:
     if type(child) is int:
         return str(child)
     if isinstance(child, (list, tuple)):
-        return "".join(
-            [item._html if type(item) is Element else _render_child(item) for item in child]
-        )
+        return "".join(_render_all(child))
     if isinstance(child, _Markup):
         return child._html
     html = getattr(child, "__html__", None)
@@ -179,14 +325,7 @@ class Fragment(_Markup):
     @classmethod
     def from_iterable(cls, children: Iterable[Child], /) -> Self:
         """Immediately consume children and snapshot their escaped HTML."""
-        return cls._from_rendered(
-            "".join(
-                [
-                    child._html if type(child) is Element else _render_child(child)
-                    for child in children
-                ]
-            )
-        )
+        return cls._from_rendered("".join(_render_all(children)))
 
     @classmethod
     def _from_rendered(cls, rendered: str) -> Self:
@@ -200,24 +339,17 @@ class Fragment(_Markup):
         return type(self)._from_rendered, (self._html,)
 
 
-class _Tag:
-    """A validated tag name with its attributes and rendered opening and closing tags."""
+# A tag definition is the tuple ``(name, attributes, opening, closing)``: the validated
+# tag name, its normalized attributes, the opening tag without its final ``>`` so that
+# rendering can append the content in one string build, and the closing tag, which is
+# empty for void elements. A plain tuple builds and unpacks faster than any class, and
+# the attributes dict is shared between elements and never mutated after creation.
+type _Tag = tuple[str, dict[str, Attribute], str, str]
 
-    # Slots read faster than named tuple fields on the element construction path.
-    # The attributes dict is shared between elements and never mutated after creation.
-    __slots__ = ("attributes", "closing", "name", "opening")
 
-    def __init__(
-        self,
-        name: str,
-        attributes: dict[str, Attribute],
-        opening: str,
-        closing: str,
-    ) -> None:
-        self.name = name
-        self.attributes = attributes
-        self.opening = opening
-        self.closing = closing
+def _opening(tag: str) -> str:
+    """Return the start of an opening tag, prefixing the document element's doctype."""
+    return "<!doctype html><html" if tag == "html" else f"<{tag}"
 
 
 @lru_cache(maxsize=256)
@@ -225,9 +357,7 @@ def _definition(tag: str) -> _Tag:
     """Validate a tag name and build its attribute-free definition."""
     if not _TAG_NAME.fullmatch(tag):
         raise ValueError(f"Invalid HTML tag name: {tag!r}")
-    doctype = "<!doctype html>" if tag == "html" else ""
-    closing = "" if tag in _VOID_TAGS else f"</{tag}>"
-    return _Tag(tag, {}, f"{doctype}<{tag}>", closing)
+    return tag, {}, _opening(tag), "" if tag in _VOID_TAGS else f"</{tag}>"
 
 
 def _element[E: Element](cls: type[E], tag: _Tag, html: str) -> E:
@@ -258,16 +388,18 @@ class Element(_Markup):
             raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
         node: str | Element = self._inner
         if type(node) is str:
-            tag, count = self._tag, self._count
-            html = self._html = f"{tag.opening * count}{node}{tag.closing * count}"
+            _, _, opening, closing = self._tag
+            count = self._count
+            html = self._html = f"{f'{opening}>' * count}{node}{closing * count}"
             return html
         openings: list[str] = []
         closings: list[str] = []
         node = self
         while not isinstance(node, str):
-            tag, count = node._tag, node._count
-            openings.append(tag.opening * count)
-            closings.append(tag.closing * count)
+            _, _, opening, closing = node._tag
+            count = node._count
+            openings.append(f"{opening}>" * count)
+            closings.append(closing * count)
             node = node._inner
         closings.reverse()
         html = self._html = f"{''.join(openings)}{node}{''.join(closings)}"
@@ -284,7 +416,8 @@ class Element(_Markup):
         if not isinstance(tag, str):
             raise TypeError("HTML tag name must be a string")
         definition = _definition(tag)
-        element = _element(cls, definition, f"{definition.opening}{definition.closing}")
+        _, _, opening, closing = definition
+        element = _element(cls, definition, f"{opening}>{closing}")
         if not children and not attributes:
             return element
         return element.__call__(*children, **attributes)
@@ -303,19 +436,19 @@ class Element(_Markup):
         become lowercase.
         """
         definition = self._tag
-        closing = definition.closing
-        if not children and not attributes and closing:
+        tag, base, opening, closing = definition
+        if not attributes and not children and closing:
             if type(first) is str:
                 element = _new(type(self))
                 element._tag = definition
-                element._html = f"{definition.opening}{_escape(first)}{closing}"
+                element._html = f"{opening}>{_escape(first)}{closing}"
                 element._count = 0
                 return element
             if type(first) is Element:
                 # Extend a run of identical wrappers, or start one around a flat element
                 # with the same tag, without copying the child's HTML.
-                tag, count = first._tag, first._count
-                if tag is definition:
+                count = first._count
+                if first._tag is definition:
                     element = _new(type(self))
                     element._tag = definition
                     element._inner = first._inner if count else first._html
@@ -328,39 +461,33 @@ class Element(_Markup):
                     element._inner = first
                     element._count = 1
                     return element
-                element._html = f"{definition.opening}{first._html}{closing}"
+                element._html = f"{opening}>{first._html}{closing}"
                 element._count = 0
                 return element
             if type(first) is int:
                 element = _new(type(self))
                 element._tag = definition
-                element._html = f"{definition.opening}{first}{closing}"
+                element._html = f"{opening}>{first}{closing}"
                 element._count = 0
                 return element
         if attributes:
             names = _ATTRIBUTE_NAMES
             merged: dict[str, Attribute] = {}
-            for keyword, value in attributes.items():
-                name = names.get(keyword)
-                if name is None:
-                    name = _attribute_name(keyword)
-                merged[name] = value
-            if len(merged) != len(attributes):
-                # Two keywords collapsed onto one name; find it for the error message.
-                seen: set[str] = set()
-                for keyword in attributes:
-                    name = _attribute_name(keyword)
-                    if name in seen:
-                        raise TypeError(f"Duplicate HTML attribute: {name!r}")
-                    seen.add(name)
-            base = definition.attributes
             if base:
-                merged = base | merged
-            tag = definition.name
-            # Grow the opening tag in place; for a handful of attributes this beats
-            # collecting parts and joining them.
-            opening = f"<!doctype html><{tag}" if tag == "html" else f"<{tag}"
-            for name, value in merged.items():
+                # Normalize the new keywords first so they override the inherited
+                # entries in place, then render the whole set from the bare tag.
+                for keyword, value in attributes.items():
+                    merged[names.get(keyword) or _attribute_name(keyword)] = value
+                if len(merged) != len(attributes):
+                    _duplicate(attributes)
+                attributes = base | merged
+                merged = {}
+                opening = _opening(tag)
+            # Normalize each name and grow the opening tag in one pass; for a handful
+            # of attributes this beats collecting parts and joining them.
+            for keyword, value in attributes.items():
+                name = names.get(keyword) or _attribute_name(keyword)
+                merged[name] = value
                 if value is None or value is False:
                     continue
                 if value is True:
@@ -371,44 +498,62 @@ class Element(_Markup):
                     opening = f'{opening} {name}="{_escape(str(value))}"'
                 else:
                     raise TypeError(f"Unsupported HTML attribute value: {type(value).__name__}")
-            # Fill the slots directly; calling _Tag.__init__ costs as much as the rest.
-            definition = _new(_Tag)
-            definition.name = tag
-            definition.attributes = merged
-            definition.opening = f"{opening}>"
-            definition.closing = closing
-        # A missing first child means no positional children at all.
+            if len(merged) != len(attributes):
+                _duplicate(attributes)
+            definition = (tag, merged, opening, closing)
+        # A missing first child means no positional children at all. Several children
+        # join once with the tags around them, rather than joining and then wrapping,
+        # so a large document is written once per level instead of twice.
         if first is _MISSING:
-            content = ""
+            html = f"{opening}>{closing}"
         elif not closing:
-            raise ValueError(f"The {definition.name} element cannot have children")
+            raise ValueError(f"The {tag} element cannot have children")
         elif children:
-            content = "".join(
+            html = "".join(
                 [
-                    child._html if type(child) is Element else _render_child(child)
-                    for child in (first, *children)
+                    f"{opening}>",
+                    *[
+                        child._html if type(child) is Element else _render_child(child)
+                        for child in (first, *children)
+                    ],
+                    closing,
                 ]
             )
+        elif type(first) is str:
+            html = f"{opening}>{_escape(first)}{closing}"
+        elif type(first) is Element:
+            html = f"{opening}>{first._html}{closing}"
+        elif isinstance(first, (list, tuple)):
+            html = "".join([f"{opening}>", *_render_all(first), closing])
         else:
-            content = first._html if type(first) is Element else _render_child(first)
+            html = f"{opening}>{_render_child(first)}{closing}"
         element = _new(type(self))
         element._tag = definition
-        element._html = f"{definition.opening}{content}{closing}" if closing else definition.opening
+        element._html = html
         element._count = 0
         return element
 
-    def repeat(self, items: Iterable[Child], /) -> Fragment:
-        """Render one element per item, reusing attributes and replacing children."""
-        definition = self._tag
-        if not definition.closing:
-            raise ValueError(f"The {definition.name} element cannot have children")
-        contents = []
-        for item in items:
-            contents.append(_escape(item) if type(item) is str else _render_child(item))
+    def repeat(self, items: Iterable[object], /) -> Fragment:
+        """Render one element per item.
+
+        An element containing ``bind()`` placeholders is a template: each item
+        fills its placeholders, and a whole bound attribute follows the usual
+        rules for ``None``, ``False``, and ``True``. Without placeholders, each
+        item replaces the children and the attributes are reused.
+        """
+        html = self._html
+        if "\x00" in html:
+            return _fill(_template(html), items)
+        tag, _, opening, closing = self._tag
+        if not closing:
+            raise ValueError(f"The {tag} element cannot have children")
+        contents = [_escape(item) if type(item) is str else _render_child(item) for item in items]
         if not contents:
             return Fragment._from_rendered("")
-        opening, closing = definition.opening, definition.closing
-        return Fragment._from_rendered(f"{opening}{f'{closing}{opening}'.join(contents)}{closing}")
+        # Fold the outer tags into the first and last items so one join writes the result.
+        contents[0] = f"{opening}>{contents[0]}"
+        contents[-1] = f"{contents[-1]}{closing}"
+        return Fragment._from_rendered(f"{closing}{opening}>".join(contents))
 
     def __reduce__(
         self,
