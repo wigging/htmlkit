@@ -1,6 +1,6 @@
 # htmpy
 
-Use the htmpy package to efficiently write HTML in Python without a template language such as Jinja.
+Efficiently write HTML directly in Python with htmpy. This allows developers to skip Jinja templates and use familiar Python tools like linters, formatters, and debuggers to build web apps more easily.
 
 ```python
 from htmpy import body, h1, head, html, p, title
