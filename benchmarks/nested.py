@@ -59,8 +59,10 @@ def main() -> None:
     print(f"Peak memory: median of {REPEAT} separate single renders with tracemalloc.")
     print("Inputs, Jinja compilation, and validation excluded; autoescaping enabled.")
     print("Intermediate htmpy elements are not retained; Jinja uses template loops.")
+    print(f"{'':32} | {'htmpy':^25} | {'Jinja':^25}")
     print(
-        f"{'Renderer':8} {'Text chars':>10} {'Depth':>7} {'Output bytes':>13} "
+        f"{'Text chars':>10} {'Depth':>7} {'Output bytes':>13} | "
+        f"{'µs/render':>12} {'Peak KiB':>12} | "
         f"{'µs/render':>12} {'Peak KiB':>12}"
     )
     for variant in ("Identical tags", "Mixed tags", "Mixed with attributes", "Mixed with siblings"):
@@ -110,7 +112,8 @@ def _measure(variant: str) -> None:
             for _, render in renderers:
                 assert render() == expected
 
-            for name, render in renderers:
+            results = []
+            for _, render in renderers:
                 seconds = median(repeat(render, number=NUMBER, repeat=REPEAT)) / NUMBER
                 peaks = []
                 for _ in range(REPEAT):
@@ -124,10 +127,9 @@ def _measure(variant: str) -> None:
                     peaks.append(peak)
                     del rendered
 
-                print(
-                    f"{name:8} {len(text):10,} {depth:7,} {output_bytes:13,} "
-                    f"{seconds * 1_000_000:12.2f} {median(peaks) / 1024:12.2f}"
-                )
+                results.append(f"{seconds * 1_000_000:12.2f} {median(peaks) / 1024:12.2f}")
+
+            print(f"{len(text):10,} {depth:7,} {output_bytes:13,} | " + " | ".join(results))
 
 
 if __name__ == "__main__":
