@@ -198,6 +198,35 @@ def test_repeat_template() -> None:
     assert str(p(bind()).repeat(["<x>"])) == "<p>&lt;x&gt;</p>"
 
 
+def test_repeat_integers() -> None:
+    """Render integers without bypassing escaping or HTML hooks on subclasses."""
+
+    class _TextInt(int):
+        def __str__(self) -> str:
+            return "<one & two>"
+
+    class _HtmlInt(int):
+        def __html__(self) -> str:
+            return "<b>three</b>"
+
+    assert str(p(each).repeat([0, -12, 10**30, True, False, _TextInt(1), _HtmlInt(3)])) == (
+        "<p>0</p><p>-12</p><p>1000000000000000000000000000000</p>"
+        "<p>True</p><p>False</p><p>&lt;one &amp; two&gt;</p><p><b>three</b></p>"
+    )
+
+
+def test_repeat_reentrant() -> None:
+    """Keep outer row content intact when a binding fills the same template."""
+    row = p(
+        each[0],
+        title=each(lambda item: str(row.repeat([("inner", False)])) if item[1] else None),
+    )
+    assert str(row.repeat([("outer &", True), ("last", False)])) == (
+        '<p title="&lt;p&gt;inner&lt;/p&gt;">outer &amp;</p><p>last</p>'
+    )
+    assert str(row.repeat([("again", False)])) == "<p>again</p>"
+
+
 def test_repeat_template_attributes() -> None:
     """Drop, flag, or quote whole bound attributes, including on void elements."""
     field = input_(name=each.name, disabled=each.active, value=each.id)

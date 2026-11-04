@@ -92,7 +92,9 @@ _BINDINGS: list[_Getter] = [lambda item: item]
 _ATTRIBUTES: dict[str, str] = {}
 _KEYS: dict[object, str] = {}
 _MARKER = re.compile(r' ([A-Za-z_:][A-Za-z0-9_.:-]*)="\x00(\d+)\x00"|\x00(\d+)\x00')
-type _Template = tuple[Callable[..., str], list[_Getter], list[Callable[[object], str]]]
+type _Template = tuple[
+    list[str], list[_Getter], list[int], list[tuple[int, Callable[[object], str]]]
+]
 
 
 def _register(getter: _Getter) -> str:
@@ -183,48 +185,49 @@ def _attribute_renderer(name: str, get: _Getter) -> Callable[[object], str]:
 
 @lru_cache(maxsize=256)
 def _template(html: str) -> _Template:
-    """Split template HTML into a format string, content getters, and attribute renderers.
+    """Split template HTML into static pieces and slots for bound values.
 
-    Content markers become the leading positional fields and whole-attribute markers
-    the trailing ones, so a fill passes two lists in that order.
+    Content getters and whole-attribute renderers retain their separate evaluation
+    order; each slot records where its result belongs in the HTML pieces.
     """
     pieces = _MARKER.split(html)
-    statics = [piece.replace("{", "{{").replace("}", "}}") for piece in pieces[0::4]]
+    parts = [pieces[0]]
     getters: list[_Getter] = []
-    renderers: list[Callable[[object], str]] = []
-    # Each marker's positional field: content markers count up from zero and
-    # attribute markers continue after the last content marker, numbered negative
-    # until the content count is known.
-    fields: list[int] = []
-    for name, attribute, content in zip(pieces[1::4], pieces[2::4], pieces[3::4]):
+    slots: list[int] = []
+    renderers: list[tuple[int, Callable[[object], str]]] = []
+    for name, attribute, content, static in zip(
+        pieces[1::4], pieces[2::4], pieces[3::4], pieces[4::4]
+    ):
         if content is None:
-            renderers.append(_attribute_renderer(name, _binding(attribute)))
-            fields.append(-len(renderers))
+            renderers.append((len(parts), _attribute_renderer(name, _binding(attribute))))
         else:
             getters.append(_binding(content))
-            fields.append(len(getters) - 1)
-    offset = len(getters) - 1
-    parts = [statics[0]]
-    for field, static in zip(fields, statics[1:]):
-        parts.append(f"{{{field if field >= 0 else offset - field}}}{static}")
-    return "".join(parts).format, getters, renderers
+            slots.append(len(parts))
+        parts.extend(("", static))
+    return parts, getters, slots, renderers
 
 
 def _fill(template: _Template, items: Iterable[object]) -> Fragment:
     """Render a compiled template once per item in a single pass."""
-    fmt, getters, renderers = template
+    parts, getters, slots, renderers = template
+    # Reuse slots across rows, but never mutate the cached template: a callback may
+    # fill the same template recursively while this render is still in progress.
+    parts = parts.copy()
     rendered: list[str] = []
-    append = rendered.append
+    escape = _escape
+    child = _render_child
     for item in items:
-        append(
-            fmt(
-                *[
-                    _escape(value) if type(value) is str else _render_child(value)
-                    for value in [get(item) for get in getters]
-                ],
-                *[render(item) for render in renderers],
+        for slot, value in zip(slots, [get(item) for get in getters]):
+            parts[slot] = (
+                escape(value)
+                if type(value) is str
+                else str(value)
+                if type(value) is int
+                else child(value)
             )
-        )
+        for slot, render in renderers:
+            parts[slot] = render(item)
+        rendered.append("".join(parts))
     return Fragment._from_rendered("".join(rendered))
 
 
@@ -480,14 +483,17 @@ class Element(_Markup):
                     merged[names.get(keyword) or _attribute_name(keyword)] = value
                 if len(merged) != len(attributes):
                     _duplicate(attributes)
-                attributes = base | merged
-                merged = {}
+                merged = base | merged
+                attributes = merged
                 opening = _opening(tag)
-            # Normalize each name and grow the opening tag in one pass; for a handful
-            # of attributes this beats collecting parts and joining them.
+            # Inherited names are already normalized. Fresh attributes are normalized
+            # while growing the opening tag, avoiding a separate pass.
             for keyword, value in attributes.items():
-                name = names.get(keyword) or _attribute_name(keyword)
-                merged[name] = value
+                if base:
+                    name = keyword
+                else:
+                    name = names.get(keyword) or _attribute_name(keyword)
+                    merged[name] = value
                 if value is None or value is False:
                     continue
                 if value is True:

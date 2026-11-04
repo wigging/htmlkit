@@ -185,10 +185,12 @@ lookup, renders the values, and allocates a new tag definition, which costs
 roughly three times as much as an element with only text. Preparing attributed
 elements once, as the reused path does with `td(class_="number")`, pays that
 cost outside the timed render. A bound template removes the per-element cost
-from the rows entirely: `repeat()` compiles the template's HTML into a format
-string and one accessor per placeholder the first time it is filled, then each
-row costs its accessor calls, escaping, and a single `str.format`, which is the
-same work Jinja's compiled loop does.
+from the rows entirely: `repeat()` compiles the template's HTML into static
+pieces and slots for bound values the first time it is filled. Each batch copies
+the pieces once, then reuses the slots across rows. Each row calls its accessors,
+escapes the values, fills the slots, and joins the pieces, avoiding per-row format
+string parsing and argument expansion. The batch-local copy keeps recursive
+bindings from overwriting an outer row's content.
 
 ## Escaping benchmark
 
