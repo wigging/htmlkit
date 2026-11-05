@@ -4,8 +4,10 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from enum import Enum
 from functools import lru_cache
+from itertools import count
 from operator import attrgetter, itemgetter
 from typing import Any, Protocol, Self
+from weakref import WeakValueDictionary
 
 # markupsafe's C escaper visits every character once and returns the same object when
 # nothing needs escaping. Calling it directly costs less than any Python wrapper, and a
@@ -83,24 +85,77 @@ def _duplicate(attributes: Mapping[str, Attribute]) -> None:
 
 type _Getter = Callable[[Any], object]
 
-# A placeholder renders as its registry index between NUL characters. NUL is not
-# escaped and cannot appear in valid HTML, so the marker passes unchanged through every
-# render path, which lets a template be built with the ordinary element API and compiled
-# by repeat() when it is first filled. Attribute and key accessors share one marker
-# each, so building the same template repeatedly does not grow the registry.
-_BINDINGS: list[_Getter] = [lambda item: item]
-_ATTRIBUTES: dict[str, str] = {}
-_KEYS: dict[object, str] = {}
-_MARKER = re.compile(r' ([A-Za-z_:][A-Za-z0-9_.:-]*)="\x00(\d+)\x00"|\x00(\d+)\x00')
+# NUL-delimited markers survive escaping. Their IDs are never reused, and the
+# accessor caches are weak: placeholder strings and templates own the bindings.
+_BINDING_IDS = count()
+_ATTRIBUTES: WeakValueDictionary[str, _Binding] = WeakValueDictionary()
+# Cache by identity so an arbitrary key cannot root its own template through this
+# registry. The live binding's itemgetter keeps the key (and its identity) alive.
+_KEYS: WeakValueDictionary[int, _Binding] = WeakValueDictionary()
+_PLACEHOLDER = re.compile(r"\x00(\d+)\x00")
+_MARKER = re.compile(r' ([A-Za-z_:][A-Za-z0-9_.:-]*)="([^"]*\x00\d+\x00[^"]*)"|\x00(\d+)\x00')
+_LOST_BINDING = "Binding references were lost; use + or format inside a binding callback"
 type _Template = tuple[
     list[str], list[_Getter], list[int], list[tuple[int, Callable[[object], str]]]
 ]
 
 
-def _register(getter: _Getter) -> str:
-    """Add an accessor to the registry and return its placeholder."""
-    _BINDINGS.append(getter)
-    return f"\x00{len(_BINDINGS) - 1}\x00"
+class _Binding:
+    """An accessor owned by the strings containing its marker."""
+
+    __slots__ = ("__weakref__", "get", "marker")
+
+    def __init__(self, getter: _Getter) -> None:
+        self.get = getter
+        index = str(next(_BINDING_IDS))
+        self.marker = f"\x00{index}\x00"
+
+
+_ITEM = _Binding(lambda item: item)
+
+
+class _BoundString(str):
+    """String content that owns its bindings and its compiled template."""
+
+    __slots__ = ("_bindings", "_template")
+    _bindings: tuple[_Binding, ...]
+    _template: _Template | None
+
+    def __new__(cls, html: str, bindings: tuple[_Binding, ...]) -> Self:
+        value = super().__new__(cls, html)
+        value._bindings = bindings
+        value._template = None
+        return value
+
+    def __str__(self) -> str:
+        return self
+
+    def __add__(self, other: str) -> str:
+        bindings = self._bindings
+        if isinstance(other, _BoundString):
+            bindings = tuple(set(bindings).union(other._bindings))
+        return _BoundString(str.__add__(self, other), bindings)
+
+    def __radd__(self, other: str) -> str:
+        return _BoundString(str.__add__(other, self), self._bindings)
+
+    def __copy__(self) -> Self:
+        """Share immutable text and its binding ownership when copied."""
+        return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> Self:
+        # Like ordinary strings, copies share content. In particular, do not clone
+        # a callback's captured state or an instance owning a bound method.
+        return self
+
+
+def _join(parts: list[str], separator: str = "") -> str:
+    """Join pieces, propagating binding ownership without scanning their text."""
+    html = separator.join(parts)
+    bindings = {
+        binding for part in parts if type(part) is _BoundString for binding in part._bindings
+    }
+    return _BoundString(html, tuple(bindings)) if bindings else html
 
 
 def bind(accessor: str | _Getter | None = None, /) -> str:
@@ -109,18 +164,20 @@ def bind(accessor: str | _Getter | None = None, /) -> str:
     A string accessor reads an attribute of the item, including dotted paths, a
     callable receives the item and returns the value, and no accessor uses the
     item itself. The placeholder is a string, so it works as a child, as an
-    attribute value, or inside a longer string. ``each`` offers the same
+    attribute value, or inside a longer string built with ``+``. Keep this string
+    or its template alive to retain the accessor. ``each`` offers the same
     placeholders through attribute and item access.
     """
     if accessor is None:
-        return "\x000\x00"
+        return _BoundString(_ITEM.marker, (_ITEM,))
     if type(accessor) is str:
-        marker = _ATTRIBUTES.get(accessor)
-        if marker is None:
-            marker = _ATTRIBUTES[accessor] = _register(attrgetter(accessor))
-        return marker
+        binding = _ATTRIBUTES.get(accessor)
+        if binding is None:
+            binding = _ATTRIBUTES[accessor] = _Binding(attrgetter(accessor))
+        return _BoundString(binding.marker, (binding,))
     if callable(accessor):
-        return _register(accessor)
+        binding = _Binding(accessor)
+        return _BoundString(binding.marker, (binding,))
     raise TypeError(f"Unsupported binding accessor: {type(accessor).__name__}")
 
 
@@ -139,16 +196,16 @@ class _Each:
         return bind(name)
 
     def __getitem__(self, key: object) -> str:
-        marker = _KEYS.get(key)
-        if marker is None:
-            marker = _KEYS[key] = _register(itemgetter(key))
-        return marker
+        binding = _KEYS.get(id(key))
+        if binding is None:
+            binding = _KEYS[id(key)] = _Binding(itemgetter(key))
+        return _BoundString(binding.marker, (binding,))
 
     def __call__(self, accessor: str | _Getter, /) -> str:
         return bind(accessor)
 
     def __html__(self) -> str:
-        return "\x000\x00"
+        return _BoundString(_ITEM.marker, (_ITEM,))
 
     def __repr__(self) -> str:
         return "each"
@@ -157,16 +214,37 @@ class _Each:
 each = _Each()
 
 
-def _binding(index: str) -> _Getter:
-    """Look up a marker's accessor, rejecting markers that no ``bind()`` call produced."""
+def _binding(index: str, bindings: dict[str, _Getter]) -> _Getter:
+    """Look up a marker in the bindings owned by this template."""
     try:
-        return _BINDINGS[int(index)]
-    except IndexError:
-        raise ValueError(f"Unknown binding in template: {index}") from None
+        return bindings[index]
+    except KeyError:
+        raise ValueError(_LOST_BINDING) from None
 
 
-def _attribute_renderer(name: str, get: _Getter) -> Callable[[object], str]:
-    """Render a whole bound attribute per item with the same rules as ``__call__``."""
+def _attribute_renderer(
+    name: str | None, index: str, bindings: dict[str, _Getter]
+) -> Callable[[object], str]:
+    """Render a whole attribute or an interpolated value, never as child HTML."""
+    get = _binding(index, bindings)
+    if name is None:
+
+        def interpolate(item: object) -> str:
+            value = get(item)
+            if type(value) is str:
+                return _escape(value)
+            if value is None:
+                return ""
+            if isinstance(value, (str, int, float)):
+                escaped = _escape(str(value))
+                return (
+                    _BoundString(escaped, value._bindings)
+                    if type(value) is _BoundString
+                    else escaped
+                )
+            raise TypeError(f"Unsupported HTML attribute value: {type(value).__name__}")
+
+        return interpolate
 
     def render(item: object) -> str:
         value = get(item)
@@ -177,19 +255,20 @@ def _attribute_renderer(name: str, get: _Getter) -> Callable[[object], str]:
         if type(value) is str:
             return f' {name}="{_escape(value)}"'
         if isinstance(value, (str, int, float)):
-            return f' {name}="{_escape(str(value))}"'
+            html = f' {name}="{_escape(str(value))}"'
+            return _BoundString(html, value._bindings) if type(value) is _BoundString else html
         raise TypeError(f"Unsupported HTML attribute value: {type(value).__name__}")
 
     return render
 
 
-@lru_cache(maxsize=256)
-def _template(html: str) -> _Template:
+def _template(html: _BoundString) -> _Template:
     """Split template HTML into static pieces and slots for bound values.
 
-    Content getters and whole-attribute renderers retain their separate evaluation
+    Content getters and attribute renderers retain their separate evaluation
     order; each slot records where its result belongs in the HTML pieces.
     """
+    bindings = {binding.marker[1:-1]: binding.get for binding in html._bindings}
     pieces = _MARKER.split(html)
     parts = [pieces[0]]
     getters: list[_Getter] = []
@@ -199,9 +278,20 @@ def _template(html: str) -> _Template:
         pieces[1::4], pieces[2::4], pieces[3::4], pieces[4::4]
     ):
         if content is None:
-            renderers.append((len(parts), _attribute_renderer(name, _binding(attribute))))
+            values = _PLACEHOLDER.split(attribute)
+            if len(values) == 3 and not values[0] and not values[2]:
+                renderers.append((len(parts), _attribute_renderer(name, values[1], bindings)))
+            else:
+                # Literal attribute text is already escaped. Keep it in the row's
+                # static pieces so interpolation needs no per-attribute list or join.
+                parts[-1] += f' {name}="{values[0]}'
+                for index, suffix in zip(values[1::2], values[2::2]):
+                    renderers.append((len(parts), _attribute_renderer(None, index, bindings)))
+                    parts.extend(("", suffix))
+                parts[-1] += '"' + static
+                continue
         else:
-            getters.append(_binding(content))
+            getters.append(_binding(content, bindings))
             slots.append(len(parts))
         parts.extend(("", static))
     return parts, getters, slots, renderers
@@ -216,24 +306,33 @@ def _fill(template: _Template, items: Iterable[object]) -> Fragment:
     rendered: list[str] = []
     escape = _escape
     child = _render_child
+    bound_rows = False
     for item in items:
+        bound = False
         for slot, value in zip(slots, [get(item) for get in getters]):
-            parts[slot] = (
-                escape(value)
-                if type(value) is str
-                else str(value)
-                if type(value) is int
-                else child(value)
-            )
+            if type(value) is str:
+                parts[slot] = escape(value)
+            elif type(value) is int:
+                parts[slot] = str(value)
+            else:
+                parts[slot] = content = child(value)
+                if type(content) is _BoundString:
+                    bound = True
         for slot, render in renderers:
-            parts[slot] = render(item)
-        rendered.append("".join(parts))
-    return Fragment._from_rendered("".join(rendered))
+            parts[slot] = content = render(item)
+            if type(content) is _BoundString:
+                bound = True
+        if bound:
+            rendered.append(_join(parts))
+            bound_rows = True
+        else:
+            rendered.append("".join(parts))
+    return Fragment._from_rendered(_join(rendered) if bound_rows else "".join(rendered))
 
 
-def _render_all(children: Iterable[Child]) -> list[str]:
-    """Render each child to escaped HTML, handling elements and text inline."""
-    return [
+def _render_all(children: Iterable[object]) -> tuple[list[str], bool]:
+    """Render children and flag bound pieces without scanning their text."""
+    parts = [
         child._html
         if type(child) is Element
         else _escape(child)
@@ -241,6 +340,10 @@ def _render_all(children: Iterable[Child]) -> list[str]:
         else _render_child(child)
         for child in children
     ]
+    for part in parts:
+        if type(part) is _BoundString:
+            return parts, True
+    return parts, False
 
 
 def _render_child(child: object) -> str:
@@ -248,12 +351,15 @@ def _render_child(child: object) -> str:
         return child._html
     if type(child) is str:
         return _escape(child)
+    if isinstance(child, _BoundString):
+        return _BoundString(_escape(child), child._bindings)
     if child is None:
         return ""
     if type(child) is int:
         return str(child)
     if isinstance(child, (list, tuple)):
-        return "".join(_render_all(child))
+        parts, bound = _render_all(child)
+        return _join(parts) if bound else "".join(parts)
     if isinstance(child, _Markup):
         return child._html
     html = getattr(child, "__html__", None)
@@ -328,7 +434,8 @@ class Fragment(_Markup):
     @classmethod
     def from_iterable(cls, children: Iterable[Child], /) -> Self:
         """Immediately consume children and snapshot their escaped HTML."""
-        return cls._from_rendered("".join(_render_all(children)))
+        parts, bound = _render_all(children)
+        return cls._from_rendered(_join(parts) if bound else "".join(parts))
 
     @classmethod
     def _from_rendered(cls, rendered: str) -> Self:
@@ -390,10 +497,13 @@ class Element(_Markup):
         if name != "_html":
             raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
         node: str | Element = self._inner
-        if type(node) is str:
+        if isinstance(node, str):
             _, _, opening, closing = self._tag
             count = self._count
-            html = self._html = f"{f'{opening}>' * count}{node}{closing * count}"
+            html = f"{f'{opening}>' * count}{node}{closing * count}"
+            if type(node) is _BoundString:
+                html = _BoundString(html, node._bindings)
+            self._html = html
             return html
         openings: list[str] = []
         closings: list[str] = []
@@ -405,7 +515,10 @@ class Element(_Markup):
             closings.append(closing * count)
             node = node._inner
         closings.reverse()
-        html = self._html = f"{''.join(openings)}{node}{''.join(closings)}"
+        html = f"{''.join(openings)}{node}{''.join(closings)}"
+        if type(node) is _BoundString:
+            html = _BoundString(html, node._bindings)
+        self._html = html
         return html
 
     def __new__(
@@ -440,7 +553,7 @@ class Element(_Markup):
         """
         definition = self._tag
         tag, base, opening, closing = definition
-        if not attributes and not children and closing:
+        if not attributes and not children and closing and type(opening) is str:
             if type(first) is str:
                 element = _new(type(self))
                 element._tag = definition
@@ -464,7 +577,11 @@ class Element(_Markup):
                     element._inner = first
                     element._count = 1
                     return element
-                element._html = f"{opening}>{first._html}{closing}"
+                inner = first._html
+                html = f"{opening}>{inner}{closing}"
+                element._html = (
+                    _BoundString(html, inner._bindings) if type(inner) is _BoundString else html
+                )
                 element._count = 0
                 return element
             if type(first) is int:
@@ -476,6 +593,7 @@ class Element(_Markup):
         if attributes:
             names = _ATTRIBUTE_NAMES
             merged: dict[str, Attribute] = {}
+            bindings: set[_Binding] | None = None
             if base:
                 # Normalize the new keywords first so they override the inherited
                 # entries in place, then render the whole set from the bare tag.
@@ -502,10 +620,17 @@ class Element(_Markup):
                     opening = f'{opening} {name}="{_escape(value)}"'
                 elif isinstance(value, (str, int, float)):
                     opening = f'{opening} {name}="{_escape(str(value))}"'
+                    if type(value) is _BoundString:
+                        if bindings is None:
+                            bindings = set(value._bindings)
+                        else:
+                            bindings.update(value._bindings)
                 else:
                     raise TypeError(f"Unsupported HTML attribute value: {type(value).__name__}")
             if len(merged) != len(attributes):
                 _duplicate(attributes)
+            if bindings:
+                opening = _BoundString(opening, tuple(bindings))
             definition = (tag, merged, opening, closing)
         # A missing first child means no positional children at all. Several children
         # join once with the tags around them, rather than joining and then wrapping,
@@ -515,24 +640,31 @@ class Element(_Markup):
         elif not closing:
             raise ValueError(f"The {tag} element cannot have children")
         elif children:
-            html = "".join(
-                [
-                    f"{opening}>",
-                    *[
-                        child._html if type(child) is Element else _render_child(child)
-                        for child in (first, *children)
-                    ],
-                    closing,
-                ]
-            )
+            parts = [opening + ">"]
+            bound = type(opening) is _BoundString
+            for child in (first, *children):
+                content = child._html if type(child) is Element else _render_child(child)
+                if type(content) is _BoundString:
+                    bound = True
+                parts.append(content)
+            parts.append(closing)
+            html = _join(parts) if bound else "".join(parts)
         elif type(first) is str:
             html = f"{opening}>{_escape(first)}{closing}"
-        elif type(first) is Element:
-            html = f"{opening}>{first._html}{closing}"
         elif isinstance(first, (list, tuple)):
-            html = "".join([f"{opening}>", *_render_all(first), closing])
+            parts, bound = _render_all(first)
+            parts.insert(0, opening + ">")
+            parts.append(closing)
+            html = _join(parts) if bound or type(opening) is _BoundString else "".join(parts)
         else:
-            html = f"{opening}>{_render_child(first)}{closing}"
+            content = first._html if type(first) is Element else _render_child(first)
+            html = (
+                _join([opening, ">", content, closing])
+                if type(content) is _BoundString
+                else f"{opening}>{content}{closing}"
+            )
+        if type(opening) is _BoundString and type(html) is str:
+            html = _BoundString(html, opening._bindings)
         element = _new(type(self))
         element._tag = definition
         element._html = html
@@ -548,18 +680,35 @@ class Element(_Markup):
         item replaces the children and the attributes are reused.
         """
         html = self._html
-        if "\x00" in html:
-            return _fill(_template(html), items)
+        if isinstance(html, _BoundString):
+            if html._template is None:
+                html._template = _template(html)
+            return _fill(html._template, items)
+        if "\x00" in html and _PLACEHOLDER.search(html):
+            raise ValueError(_LOST_BINDING)
         tag, _, opening, closing = self._tag
         if not closing:
             raise ValueError(f"The {tag} element cannot have children")
-        contents = [_escape(item) if type(item) is str else _render_child(item) for item in items]
+        contents: list[str] = []
+        bound = False
+        escape = _escape
+        for item in items:
+            if type(item) is str:
+                contents.append(escape(item))
+            else:
+                content = _render_child(item)
+                if type(content) is _BoundString:
+                    bound = True
+                contents.append(content)
         if not contents:
             return Fragment._from_rendered("")
         # Fold the outer tags into the first and last items so one join writes the result.
-        contents[0] = f"{opening}>{contents[0]}"
-        contents[-1] = f"{contents[-1]}{closing}"
-        return Fragment._from_rendered(f"{closing}{opening}>".join(contents))
+        contents[0] = f"{opening}>" + contents[0]
+        contents[-1] = contents[-1] + closing
+        separator = f"{closing}{opening}>"
+        return Fragment._from_rendered(
+            _join(contents, separator) if bound else separator.join(contents)
+        )
 
     def __reduce__(
         self,

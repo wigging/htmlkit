@@ -1,9 +1,11 @@
 """Check fragment construction, nesting, snapshots, and repeated elements."""
 
+import gc
 from copy import copy, deepcopy
 from operator import itemgetter
 from types import SimpleNamespace
 from typing import NamedTuple
+from weakref import ref
 
 import pytest
 
@@ -225,6 +227,65 @@ def test_repeat_reentrant() -> None:
         '<p title="&lt;p&gt;inner&lt;/p&gt;">outer &amp;</p><p>last</p>'
     )
     assert str(row.repeat([("again", False)])) == "<p>again</p>"
+
+
+def test_lost_bindings() -> None:
+    """Reject formatted markers whose accessor references have been discarded."""
+    for text in (
+        f"Hello {each[0]}",
+        "".join(["Hello ", each[0]]),
+        "Hello {}".format(each[0]),  # noqa: UP032 - exercise str.format, not an f-string
+    ):
+        for row in (p(text), p("kept", title=text), p(text, each[1]), input_(value=text)):
+            with pytest.raises(ValueError, match=r"use \+ or format inside a binding callback"):
+                row.repeat([("Alice", "Bob")])
+    # A NUL without a placeholder is not an orphan binding.
+    assert str(p(title="a\x00b").repeat(["next"])) == '<p title="a\x00b">next</p>'
+
+
+@pytest.mark.parametrize("render", [False, True])
+def test_binding_lifetime(render: bool) -> None:
+    """Keep callbacks alive with copied templates, but not with rendered results."""
+
+    class _Context:
+        def label(self, item: str) -> str:
+            return f"{item} & label"
+
+    context = _Context()
+    reference = ref(context)
+    placeholder = deepcopy(copy(bind(context.label)))
+    del context
+    row = p(Fragment.from_iterable(span(placeholder) for _ in range(2)), title="for " + placeholder)
+    cloned = deepcopy(copy(row))
+    del placeholder, row
+    gc.collect()
+    assert reference() is not None
+    if render:
+        result = cloned.repeat(["one", "two"])
+        assert str(result) == (
+            '<p title="for one &amp; label"><span>one &amp; label</span>'
+            '<span>one &amp; label</span></p><p title="for two &amp; label">'
+            "<span>two &amp; label</span><span>two &amp; label</span></p>"
+        )
+    del cloned
+    gc.collect()
+    assert reference() is None
+
+
+def test_discarded_binding() -> None:
+    """Release callbacks even when a placeholder is never used in a template."""
+
+    def label(item: object) -> object:
+        return item
+
+    reference = ref(label)
+    placeholder = each(label)
+    del label
+    gc.collect()
+    assert reference() is not None
+    del placeholder
+    gc.collect()
+    assert reference() is None
 
 
 def test_repeat_template_attributes() -> None:

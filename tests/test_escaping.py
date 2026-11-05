@@ -3,8 +3,9 @@
 from copy import copy, deepcopy
 
 import pytest
+from markupsafe import Markup
 
-from htmpy import Fragment, Raw, li, p, script, ul
+from htmpy import Fragment, Raw, each, li, p, script, ul
 
 
 def test_escaping():
@@ -24,6 +25,26 @@ def test_escaping():
     )
     with pytest.raises(ValueError):
         p(**{'x="injected"': "value"})
+
+
+def test_bound_attribute_escaping() -> None:
+    """Escape interpolated attributes without changing trusted child rendering."""
+    value = Markup('<b>" onmouseover="alert(1) &</b>')
+    row = p(
+        each[0],
+        title="prefix & " + each[0] + " / " + each[1] + " suffix",
+        data_value=each[0],
+    )
+    escaped = "&lt;b&gt;&#34; onmouseover=&#34;alert(1) &amp;&lt;/b&gt;"
+    assert str(row.repeat([(value, "<second>"), (str(value), "last &")])) == (
+        f'<p title="prefix &amp; {escaped} / &lt;second&gt; suffix" data-value="{escaped}">'
+        '<b>" onmouseover="alert(1) &</b></p>'
+        f'<p title="prefix &amp; {escaped} / last &amp; suffix" data-value="{escaped}">'
+        f"{escaped}</p>"
+    )
+    for child in (Raw('" onclick="alert(1)'), p("nested"), Fragment("text")):
+        with pytest.raises(TypeError, match="Unsupported HTML attribute value"):
+            p(title="prefix " + each[0]).repeat([(child,)])
 
 
 def test_raw():
