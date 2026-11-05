@@ -229,6 +229,62 @@ def test_repeat_reentrant() -> None:
     assert str(row.repeat([("again", False)])) == "<p>again</p>"
 
 
+def test_repeat_stateful_values() -> None:
+    """Preserve stateful getters and conversions, even for repeated placeholders."""
+    count = 0
+
+    class _Child:
+        def __html__(self) -> str:
+            nonlocal count
+            count += 1
+            return f"<b>{count}</b>"
+
+    class _Attribute(int):
+        def __str__(self) -> str:
+            nonlocal count
+            count += 1
+            return f"&{count}"
+
+    def child(item: object) -> _Child:
+        nonlocal count
+        count += 1
+        return _Child()
+
+    def attribute(item: object) -> _Attribute:
+        nonlocal count
+        count += 1
+        return _Attribute(count)
+
+    content = each(child)
+    value = each(attribute)
+    row = p(content, content, title=value, data_note="step " + value)
+    assert str(row.repeat([None, None])) == (
+        '<p title="&amp;6" data-note="step &amp;8"><b>3</b><b>4</b></p>'
+        '<p title="&amp;14" data-note="step &amp;16"><b>11</b><b>12</b></p>'
+    )
+
+
+def test_repeat_value_lifetime() -> None:
+    """Release converted attribute values before evaluating the next binding."""
+
+    class _Value(str):
+        pass
+
+    references: list[ref[_Value]] = []
+
+    def value(item: object) -> _Value:
+        gc.collect()
+        result = _Value("retained" if any(reference() for reference in references) else "released")
+        references.append(ref(result))
+        return result
+
+    row = p(title=each(value), data_note="x" + each(value))
+    assert str(row.repeat([None, None])) == (
+        '<p title="released" data-note="xreleased"></p>'
+        '<p title="released" data-note="xreleased"></p>'
+    )
+
+
 def test_lost_bindings() -> None:
     """Reject formatted markers whose accessor references have been discarded."""
     for text in (
@@ -297,8 +353,33 @@ def test_repeat_template_attributes() -> None:
     assert str(td(each.id, title=each.note).repeat(ITEMS)) == (
         '<td>1</td><td title="say &#34;hi&#34;">2</td>'
     )
+    row = p(title=bind(), data_note="x" + bind())
+    assert str(row.repeat([None, False, True, 0, "", -1.5])) == (
+        '<p data-note="x"></p><p data-note="xFalse"></p>'
+        '<p title data-note="xTrue"></p><p title="0" data-note="x0"></p>'
+        '<p title="" data-note="x"></p><p title="-1.5" data-note="x-1.5"></p>'
+    )
+    staged = div(row.repeat([each.name]))
+    assert str(staged.repeat([SimpleNamespace(name="A & 雪")])) == (
+        '<div><p title="A &amp; 雪" data-note="xA &amp; 雪"></p></div>'
+    )
     with pytest.raises(TypeError, match="Unsupported HTML attribute value"):
         td(title=each(lambda item: [item])).repeat(ITEMS)
+
+
+def test_repeat_converted_binding() -> None:
+    """Preserve placeholders returned by scalar conversion in interpolated attributes."""
+
+    class _Deferred(int):
+        def __str__(self) -> str:
+            return bind()
+
+    row = p(title="prefix " + bind())
+    staged = div(row.repeat([_Deferred(1), "plain"]))
+    assert str(staged.repeat(['A & <B> "雪"'])) == (
+        '<div><p title="prefix A &amp; &lt;B&gt; &#34;雪&#34;"></p>'
+        '<p title="prefix plain"></p></div>'
+    )
 
 
 def test_each_and_bind() -> None:

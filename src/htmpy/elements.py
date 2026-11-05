@@ -95,9 +95,7 @@ _KEYS: WeakValueDictionary[int, _Binding] = WeakValueDictionary()
 _PLACEHOLDER = re.compile(r"\x00(\d+)\x00")
 _MARKER = re.compile(r' ([A-Za-z_:][A-Za-z0-9_.:-]*)="([^"]*\x00\d+\x00[^"]*)"|\x00(\d+)\x00')
 _LOST_BINDING = "Binding references were lost; use + or format inside a binding callback"
-type _Template = tuple[
-    list[str], list[_Getter], list[int], list[tuple[int, Callable[[object], str]]]
-]
+type _Template = tuple[list[str], list[_Getter], list[int], list[tuple[int, str | None, _Getter]]]
 
 
 class _Binding:
@@ -222,71 +220,31 @@ def _binding(index: str, bindings: dict[str, _Getter]) -> _Getter:
         raise ValueError(_LOST_BINDING) from None
 
 
-def _attribute_renderer(
-    name: str | None, index: str, bindings: dict[str, _Getter]
-) -> Callable[[object], str]:
-    """Render a whole attribute or an interpolated value, never as child HTML."""
-    get = _binding(index, bindings)
-    if name is None:
-
-        def interpolate(item: object) -> str:
-            value = get(item)
-            if type(value) is str:
-                return _escape(value)
-            if value is None:
-                return ""
-            if isinstance(value, (str, int, float)):
-                escaped = _escape(str(value))
-                return (
-                    _BoundString(escaped, value._bindings)
-                    if type(value) is _BoundString
-                    else escaped
-                )
-            raise TypeError(f"Unsupported HTML attribute value: {type(value).__name__}")
-
-        return interpolate
-
-    def render(item: object) -> str:
-        value = get(item)
-        if value is None or value is False:
-            return ""
-        if value is True:
-            return f" {name}"
-        if type(value) is str:
-            return f' {name}="{_escape(value)}"'
-        if isinstance(value, (str, int, float)):
-            html = f' {name}="{_escape(str(value))}"'
-            return _BoundString(html, value._bindings) if type(value) is _BoundString else html
-        raise TypeError(f"Unsupported HTML attribute value: {type(value).__name__}")
-
-    return render
-
-
 def _template(html: _BoundString) -> _Template:
     """Split template HTML into static pieces and slots for bound values.
 
-    Content getters and attribute renderers retain their separate evaluation
-    order; each slot records where its result belongs in the HTML pieces.
+    Content and attribute getters retain their separate evaluation order.
+    An attribute slot with no name interpolates a value into static attribute text.
     """
     bindings = {binding.marker[1:-1]: binding.get for binding in html._bindings}
     pieces = _MARKER.split(html)
     parts = [pieces[0]]
     getters: list[_Getter] = []
     slots: list[int] = []
-    renderers: list[tuple[int, Callable[[object], str]]] = []
+    attributes: list[tuple[int, str | None, _Getter]] = []
     for name, attribute, content, static in zip(
         pieces[1::4], pieces[2::4], pieces[3::4], pieces[4::4]
     ):
         if content is None:
             values = _PLACEHOLDER.split(attribute)
             if len(values) == 3 and not values[0] and not values[2]:
-                renderers.append((len(parts), _attribute_renderer(name, values[1], bindings)))
+                attributes.append((len(parts), name, _binding(values[1], bindings)))
             else:
                 # Literal attribute text is already escaped. Keep it in the row's
                 # static pieces so interpolation needs no per-attribute list or join.
                 parts[-1] += f' {name}="{values[0]}'
                 for index, suffix in zip(values[1::2], values[2::2]):
-                    renderers.append((len(parts), _attribute_renderer(None, index, bindings)))
+                    attributes.append((len(parts), None, _binding(index, bindings)))
                     parts.extend(("", suffix))
                 parts[-1] += '"' + static
                 continue
@@ -294,12 +252,12 @@ def _template(html: _BoundString) -> _Template:
             getters.append(_binding(content, bindings))
             slots.append(len(parts))
         parts.extend(("", static))
-    return parts, getters, slots, renderers
+    return parts, getters, slots, attributes
 
 
 def _fill(template: _Template, items: Iterable[object]) -> Fragment:
     """Render a compiled template once per item in a single pass."""
-    parts, getters, slots, renderers = template
+    parts, getters, slots, attributes = template
     # Reuse slots across rows, but never mutate the cached template: a callback may
     # fill the same template recursively while this render is still in progress.
     parts = parts.copy()
@@ -318,10 +276,29 @@ def _fill(template: _Template, items: Iterable[object]) -> Fragment:
                 parts[slot] = content = child(value)
                 if type(content) is _BoundString:
                     bound = True
-        for slot, render in renderers:
-            parts[slot] = content = render(item)
+        for slot, name, get in attributes:
+            attribute = get(item)
+            if type(attribute) is str:
+                content = escape(attribute)
+            elif attribute is None or (attribute is False and name is not None):
+                parts[slot] = content = ""
+                continue
+            elif attribute is True and name is not None:
+                parts[slot] = content = f" {name}"
+                continue
+            elif isinstance(attribute, (str, int, float)):
+                content = escape(str(attribute))
+            else:
+                raise TypeError(f"Unsupported HTML attribute value: {type(attribute).__name__}")
+            if name is not None:
+                content = f' {name}="{content}"'
+            if type(attribute) is _BoundString:
+                content = _BoundString(content, attribute._bindings)
             if type(content) is _BoundString:
                 bound = True
+            # Do not retain converted attribute values during the next getter.
+            del attribute
+            parts[slot] = content
         if bound:
             rendered.append(_join(parts))
             bound_rows = True
