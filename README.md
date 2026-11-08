@@ -1,4 +1,8 @@
-# htmpy
+<p align="center">
+  <img src="assets/icon.webp" alt="htmpy icon: cyan and magenta angle brackets" width="112" height="112">
+</p>
+
+<h1 align="center">htmpy</h1>
 
 Write HTML in Python.
 
@@ -43,8 +47,6 @@ uv add git+https://github.com/wigging/htmpy
 ```
 
 ## Elements and content
-
-Use
 
 Use `input_`, `map_`, `object_`, and `del_` for the corresponding HTML tags that conflict with reserved Python objects; svg and math are not included. For custom tags, import `Element` and use `Element("my-widget", "Text")`. Void elements such as `meta`, `link`, and `input` do not accept children.
 
