@@ -1,21 +1,21 @@
 <p align="center">
-  <img src="assets/icon.webp" alt="htmpy icon: cyan and magenta angle brackets" width="112" height="112">
+  <img src="assets/icon.webp" alt="htmlkit icon: cyan and magenta angle brackets" width="112" height="112">
 </p>
 
-<h1 align="center">htmpy</h1>
+<h1 align="center">htmlkit</h1>
 
 Write HTML in Python.
 
-The htmpy package allows developers to skip Jinja templates and use familiar Python tools like linters, formatters, and debuggers to build web apps more easily.
+The htmlkit package allows developers to skip Jinja templates and use familiar Python tools like linters, formatters, and debuggers to build web apps more easily.
 
 ```python
-from htmpy import body, h1, head, html, p, title
+from htmlkit import body, h1, head, html, p, title
 
 page = html(
     head(title("Hello from Python")),
     body(
         h1("Hello from Python", id="banner", style="font-style: italic;"),
-        p("Write HTML in Python with htmpy.", class_="intro"),
+        p("Write HTML in Python with htmlkit.", class_="intro"),
     ),
     lang="en",
 )
@@ -33,17 +33,17 @@ The formatted print output is:
   </head>
   <body>
     <h1 id="banner" style="font-style: italic">Hello from Python</h1>
-    <p class="intro">Write HTML in Python with htmpy.</p>
+    <p class="intro">Write HTML in Python with htmlkit.</p>
   </body>
 </html>
 ```
 
 ## Installation
 
-Install htmpy with the awesome uv tool. See <https://docs.astral.sh/uv/> for instructions on installing uv and using it to manage Python projects and dependencies.
+Install htmlkit with the awesome uv tool. See <https://docs.astral.sh/uv/> for instructions on installing uv and using it to manage Python projects and dependencies.
 
 ```sh
-uv add git+https://github.com/wigging/htmpy
+uv add git+https://github.com/wigging/htmlkit
 ```
 
 ## Elements and content
@@ -53,7 +53,7 @@ Use `input_`, `map_`, `object_`, and `del_` for the corresponding HTML tags that
 Children can be text, integers, elements, fragments, or nested lists and tuples; `None` is ignored. Text and attribute values are escaped automatically, writing `&amp;`, `&lt;`, `&gt;`, `&#34;`, and `&#39;` produces the following:
 
 ```python
-from htmpy import p
+from htmlkit import p
 
 str(p("A < B & C"))
 # '<p>A &lt; B &amp; C</p>'
@@ -71,7 +71,7 @@ Render with `str(element)` or `print(element)`. The `html`` element adds the HTM
 Use `repeat()` to create one element per item, sharing the same attributes:
 
 ```python
-from htmpy import ul, li
+from htmlkit import ul, li
 
 items = ul(li.repeat(["Apples", "Pears & peaches"]))
 
@@ -86,7 +86,7 @@ For rows with several values per item, build the element once with `each` placeh
 ```python
 from dataclasses import dataclass
 
-from htmpy import a, each, table, tbody, td, th, thead, tr
+from htmlkit import a, each, table, tbody, td, th, thead, tr
 
 
 @dataclass
@@ -140,12 +140,12 @@ The print output, shown here with formatting added, fills the template once per 
 
 A whole bound attribute follows the usual rules: `None` and `False` omit it,`True` renders only its name, as hidden does above. Bound values are escaped like children, so an element or a `repeat()` result can be bound to nest loops. `each("owner.name")` reads a dotted path, and `bind()` is the function behind `each` for code that prefers it. A template's HTML is compiled on its first `repeat()`, so rows cost far less than building each element; an element with placeholders is meant for `repeat()`, and rendering it directly leaves the placeholders in the output.
 
-Placeholders and templates keep their callbacks alive for reuse. Once they are discarded, htmpy no longer retains the callbacks or their captured objects; completed `repeat()` results do not retain them. Use `+` rather than f-strings, `str.join()`, or other operations that discard the string subclass and its accessor references. `repeat()` raises `ValueError` if a placeholder has lost its accessor reference. Alternatively, put string formatting inside a callback, such as `each(lambda item: f"status {item.status}")`.
+Placeholders and templates keep their callbacks alive for reuse. Once they are discarded, htmlkit no longer retains the callbacks or their captured objects; completed `repeat()` results do not retain them. Use `+` rather than f-strings, `str.join()`, or other operations that discard the string subclass and its accessor references. `repeat()` raises `ValueError` if a placeholder has lost its accessor reference. Alternatively, put string formatting inside a callback, such as `each(lambda item: f"status {item.status}")`.
 
 Use `Fragment` to group children without a wrapping tag, or `from_iterable()` to collect a generator:
 
 ```python
-from htmpy import Fragment, h1, p
+from htmlkit import Fragment, h1, p
 
 content = Fragment(h1("Welcome"), p("A & B"))
 paragraphs = Fragment.from_iterable(p(name) for name in ["Alice", "Bob"])
@@ -158,7 +158,7 @@ Both `repeat()` and `from_iterable()` consume their input immediately.
 Use `Raw` for trusted markup that must not be escaped, such as scripts and styles:
 
 ```python
-from htmpy import Raw, head, script, style
+from htmlkit import Raw, head, script, style
 
 head(
     style(Raw("body > main { margin: 0 auto }")),
@@ -170,19 +170,19 @@ head(
 
 ## FastAPI web app
 
-In a FastAPI web application, use htmpy instead of Jinja templates for HTML responses. An htmpy element can be passed directly to the `HTMLResponse` as demonstrated below.
+In a FastAPI web application, use htmlkit instead of Jinja templates for HTML responses. An htmlkit element can be passed directly to the `HTMLResponse` as demonstrated below.
 
 ```python
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-from htmpy import html, body, h1, p
+from htmlkit import html, body, h1, p
 
 app = FastAPI()
 
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    page = html(body(h1("Hello"), p("Built with htmpy.")))
+    page = html(body(h1("Hello"), p("Built with htmlkit.")))
     return HTMLResponse(page)
 ```
 

@@ -1,4 +1,4 @@
-"""Compare short and long text escaping in htmpy with a compiled Jinja template."""
+"""Compare short and long text escaping in htmlkit with a compiled Jinja template."""
 
 from functools import partial
 from statistics import median
@@ -6,7 +6,7 @@ from timeit import repeat
 
 from jinja2 import Environment
 
-from htmpy import article, h1, p
+from htmlkit import article, h1, p
 
 PARAGRAPH_COUNT = 50
 PARAGRAPH_LENGTHS = (16, 63, 64, 65, 256, 600)
@@ -33,12 +33,12 @@ def paragraphs(phrase: str, length: int) -> list[str]:
     return [text for _ in range(PARAGRAPH_COUNT)]
 
 
-def render_htmpy(texts: list[str]) -> str:
+def render_htmlkit(texts: list[str]) -> str:
     """Render the article with individually constructed paragraphs."""
     return str(article(h1(TITLE), [p(text) for text in texts]))
 
 
-def render_htmpy_repeat(texts: list[str]) -> str:
+def render_htmlkit_repeat(texts: list[str]) -> str:
     """Render the article by repeating the paragraph element."""
     return str(article(h1(TITLE), p.repeat(texts)))
 
@@ -56,7 +56,7 @@ def main() -> None:
         for name, phrase in TEXTS.items()
     }
 
-    # Check the rendered HTML to make sure htmpy and Jinja create the same output
+    # Check the rendered HTML to make sure htmlkit and Jinja create the same output
     for (_, length), texts in variants.items():
         assert len(texts) == PARAGRAPH_COUNT
         assert all(len(text) == length for text in texts)
@@ -75,7 +75,9 @@ def main() -> None:
             + "</article>"
         )
 
-        assert render_htmpy(texts) == render_htmpy_repeat(texts) == render_jinja(texts) == expected
+        assert (
+            render_htmlkit(texts) == render_htmlkit_repeat(texts) == render_jinja(texts) == expected
+        )
 
     print(
         f"{REPEAT} repeats of {NUMBER:,} articles with {PARAGRAPH_COUNT} paragraphs; "
@@ -85,8 +87,8 @@ def main() -> None:
     print("Input preparation and Jinja compilation excluded; autoescaping enabled.")
 
     renderers = (
-        ("htmpy", render_htmpy),
-        ("htmpy repeat", render_htmpy_repeat),
+        ("htmlkit", render_htmlkit),
+        ("htmlkit repeat", render_htmlkit_repeat),
         ("Jinja", render_jinja),
     )
 

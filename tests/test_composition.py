@@ -9,7 +9,7 @@ from weakref import ref
 
 import pytest
 
-from htmpy import (
+from htmlkit import (
     Child,
     Element,
     Fragment,

@@ -1,6 +1,6 @@
 """Build a basic HTML web page."""
 
-from htmpy import Element, body, h1, head, html, p, title
+from htmlkit import Element, body, h1, head, html, p, title
 
 
 def basic_page() -> Element:

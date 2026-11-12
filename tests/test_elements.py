@@ -5,7 +5,7 @@ from types import MappingProxyType
 
 import pytest
 
-from htmpy import Child, Element, Fragment, Raw, body, link, meta, p
+from htmlkit import Child, Element, Fragment, Raw, body, link, meta, p
 
 
 def test_public_construction() -> None:

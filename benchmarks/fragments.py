@@ -5,7 +5,7 @@ from timeit import repeat
 
 from jinja2 import Environment
 
-from htmpy import Fragment, h1, p
+from htmlkit import Fragment, h1, p
 
 CONTEXT = {"heading": "Hello & welcome", "message": "Build a <fragment> with café."}
 ITEM_COUNT = 1_000

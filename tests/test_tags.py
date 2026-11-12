@@ -5,8 +5,8 @@ import keyword
 
 import pytest
 
-import htmpy
-from htmpy import Element, div, html, input_, map_, object_, p, tags
+import htmlkit
+from htmlkit import Element, div, html, input_, map_, object_, p, tags
 
 VOID = {
     "area",
@@ -31,7 +31,7 @@ def test_tag_renders_its_html_name(name):
     element = getattr(tags, name)
     tag = name.rstrip("_")
     assert isinstance(element, Element)
-    assert getattr(htmpy, name) is element
+    assert getattr(htmlkit, name) is element
     if tag in VOID:
         assert str(element) == f"<{tag}>"
         with pytest.raises(ValueError, match="cannot have children"):
@@ -54,20 +54,20 @@ def test_tag_module_covers_the_living_standard():
     assert not set(tags.__all__) & set(dir(builtins))
     for name in ("title", "script", "style", "form", "input_", "table", "nav", "span", "img"):
         assert name in tags.__all__
-    assert all(name in htmpy.__all__ for name in tags.__all__)
+    assert all(name in htmlkit.__all__ for name in tags.__all__)
     assert "svg" not in tags.__all__ and "math" not in tags.__all__
 
 
 def test_import_styles():
     """Expose the same Python-safe elements through named and package imports."""
-    assert html(div(p("Hi", class_="intro")), lang="en") == htmpy.html(
-        htmpy.div(htmpy.p("Hi", class_="intro")), lang="en"
+    assert html(div(p("Hi", class_="intro")), lang="en") == htmlkit.html(
+        htmlkit.div(htmlkit.p("Hi", class_="intro")), lang="en"
     )
     assert str(map_(object_(input_(type_="text")), name="locations")) == (
         '<map name="locations"><object><input type="text"></object></map>'
     )
     for name in ("input", "map", "object", "del"):
-        assert not hasattr(htmpy, name)
+        assert not hasattr(htmlkit, name)
         assert not hasattr(tags, name)
 
 

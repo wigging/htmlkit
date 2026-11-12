@@ -5,7 +5,7 @@ from copy import copy, deepcopy
 import pytest
 from markupsafe import Markup
 
-from htmpy import Fragment, Raw, each, li, p, script, ul
+from htmlkit import Fragment, Raw, each, li, p, script, ul
 
 
 def test_escaping():

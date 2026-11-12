@@ -6,7 +6,7 @@ from typing import NamedTuple
 
 from jinja2 import Environment
 
-from htmpy import (
+from htmlkit import (
     a,
     body,
     button,
@@ -133,7 +133,7 @@ TEMPLATE = Environment(autoescape=True).from_string(
 NUMBER = 1_000
 REPEAT = 5
 
-# Static parts prepared once for the reused htmpy renderer.
+# Static parts prepared once for the reused htmlkit renderer.
 HEAD = head(
     meta(charset="utf-8"),
     title(PAGE_TITLE),
@@ -179,7 +179,7 @@ ROW = tr(
 )
 
 
-def render_htmpy_fresh() -> str:
+def render_htmlkit_fresh() -> str:
     """Render the page by building every element on each call."""
     current = CURRENT
     priority = PRIORITY
@@ -275,7 +275,7 @@ def render_htmpy_fresh() -> str:
     return str(page)
 
 
-def render_htmpy_reused() -> str:
+def render_htmlkit_reused() -> str:
     """Render the page with prepared static sections and attributed templates."""
     priority = PRIORITY
     rows = ROWS
@@ -342,7 +342,7 @@ def render_htmpy_reused() -> str:
     return str(page)
 
 
-def render_htmpy_repeat() -> str:
+def render_htmlkit_repeat() -> str:
     """Render the reused page with the table rows filled from a row template."""
     priority = PRIORITY
     rows = ROWS
@@ -456,8 +456,8 @@ def _expected() -> str:
 def main() -> None:
     """Validate page output and report median rendering times."""
     expected = _expected()
-    assert render_htmpy_fresh() == render_htmpy_reused() == render_jinja() == expected
-    assert render_htmpy_repeat() == expected
+    assert render_htmlkit_fresh() == render_htmlkit_reused() == render_jinja() == expected
+    assert render_htmlkit_repeat() == expected
 
     print(
         f"{REPEAT} repeats of {NUMBER:,} pages with a {ROW_COUNT}-row table and "
@@ -465,9 +465,9 @@ def main() -> None:
     )
     print("Input preparation and Jinja compilation excluded; autoescaping enabled.")
     for name, render in (
-        ("htmpy fresh", render_htmpy_fresh),
-        ("htmpy reused", render_htmpy_reused),
-        ("htmpy repeat", render_htmpy_repeat),
+        ("htmlkit fresh", render_htmlkit_fresh),
+        ("htmlkit reused", render_htmlkit_reused),
+        ("htmlkit repeat", render_htmlkit_repeat),
         ("Jinja", render_jinja),
     ):
         seconds = median(repeat(render, number=NUMBER, repeat=REPEAT)) / NUMBER

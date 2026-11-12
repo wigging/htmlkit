@@ -1,11 +1,11 @@
-"""Compare htmpy list construction with rendering a compiled Jinja template."""
+"""Compare htmlkit list construction with rendering a compiled Jinja template."""
 
 from statistics import median
 from timeit import repeat
 
 from jinja2 import Environment
 
-from htmpy import li, ul
+from htmlkit import li, ul
 
 ITEM_COUNT = 1_000
 CONTEXT = {"items": [f"Item {index} & <content>" for index in range(ITEM_COUNT)]}
@@ -16,12 +16,12 @@ NUMBER = 1_000
 REPEAT = 5
 
 
-def render_htmpy() -> str:
+def render_htmlkit() -> str:
     """Render an unordered list with individually constructed list items."""
     return str(ul([li(item) for item in CONTEXT["items"]]))
 
 
-def render_htmpy_repeat() -> str:
+def render_htmlkit_repeat() -> str:
     """Render an unordered list by repeating the list item element."""
     return str(ul(li.repeat(CONTEXT["items"])))
 
@@ -38,13 +38,13 @@ def main() -> None:
         + "".join(f"<li>Item {index} &amp; &lt;content&gt;</li>" for index in range(ITEM_COUNT))
         + "</ul>"
     )
-    assert render_htmpy() == render_htmpy_repeat() == render_jinja() == expected
+    assert render_htmlkit() == render_htmlkit_repeat() == render_jinja() == expected
 
     print(f"{REPEAT} repeats of {NUMBER:,} lists with {ITEM_COUNT:,} items; median time per list")
     print("Input preparation and Jinja compilation excluded; autoescaping enabled.")
     for name, render in (
-        ("htmpy", render_htmpy),
-        ("htmpy repeat", render_htmpy_repeat),
+        ("htmlkit", render_htmlkit),
+        ("htmlkit repeat", render_htmlkit_repeat),
         ("Jinja", render_jinja),
     ):
         seconds = median(repeat(render, number=NUMBER, repeat=REPEAT)) / NUMBER

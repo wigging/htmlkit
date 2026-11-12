@@ -1,11 +1,11 @@
-"""Compare htmpy page construction with rendering a compiled Jinja template."""
+"""Compare htmlkit page construction with rendering a compiled Jinja template."""
 
 from statistics import median
 from timeit import repeat
 
 from jinja2 import Environment
 
-from htmpy import body, h1, head, html, link, meta, p
+from htmlkit import body, h1, head, html, link, meta, p
 
 CONTEXT = {"heading": "Hello & welcome", "message": "Build a simple <HTML> page."}
 TEMPLATE = Environment(autoescape=True).from_string(
@@ -23,8 +23,8 @@ NUMBER = 10_000
 REPEAT = 5
 
 
-def render_htmpy_fresh() -> str:
-    """Render a page by constructing every htmpy element anew."""
+def render_htmlkit_fresh() -> str:
+    """Render a page by constructing every htmlkit element anew."""
     return str(
         html(
             head(
@@ -37,8 +37,8 @@ def render_htmpy_fresh() -> str:
     )
 
 
-def render_htmpy() -> str:
-    """Render a page while reusing prepared htmpy elements."""
+def render_htmlkit() -> str:
+    """Render a page while reusing prepared htmlkit elements."""
     return str(PAGE(HEAD, body(h1(CONTEXT["heading"]), PARAGRAPH(CONTEXT["message"]))))
 
 
@@ -55,13 +55,13 @@ def main() -> None:
         '<h1>Hello &amp; welcome</h1><p class="intro">'
         "Build a simple &lt;HTML&gt; page.</p></body></html>"
     )
-    assert render_htmpy_fresh() == render_htmpy() == render_jinja() == expected
+    assert render_htmlkit_fresh() == render_htmlkit() == render_jinja() == expected
 
     print(f"{REPEAT} repeats of {NUMBER:,} pages; median time per page")
-    print("Static htmpy preparation and Jinja compilation excluded; autoescaping enabled.")
+    print("Static htmlkit preparation and Jinja compilation excluded; autoescaping enabled.")
     for name, render in (
-        ("htmpy fresh", render_htmpy_fresh),
-        ("htmpy reused", render_htmpy),
+        ("htmlkit fresh", render_htmlkit_fresh),
+        ("htmlkit reused", render_htmlkit),
         ("Jinja", render_jinja),
     ):
         seconds = median(repeat(render, number=NUMBER, repeat=REPEAT)) / NUMBER

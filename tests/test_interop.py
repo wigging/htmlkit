@@ -1,9 +1,9 @@
-"""Check encoding and the HTML protocol through htmpy's public API."""
+"""Check encoding and the HTML protocol through htmlkit's public API."""
 
 import pytest
 from markupsafe import Markup
 
-from htmpy import Element, Fragment, Raw, p
+from htmlkit import Element, Fragment, Raw, p
 
 
 @pytest.mark.parametrize("element", [p("café"), Fragment(p("café")), Raw("<p>café</p>")])

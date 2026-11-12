@@ -361,7 +361,7 @@ wheels = [
 ]
 
 [[package]]
-name = "htmpy"
+name = "htmlkit"
 version = "0.1"
 source = { editable = "." }
 dependencies = [

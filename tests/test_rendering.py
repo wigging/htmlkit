@@ -1,6 +1,6 @@
 """Check complete documents and nested lists."""
 
-from htmpy import body, h1, head, html, li, link, meta, ol, p, ul
+from htmlkit import body, h1, head, html, li, link, meta, ol, p, ul
 
 
 def test_document() -> None:

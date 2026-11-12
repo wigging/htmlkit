@@ -1,5 +1,5 @@
 [project]
-name = "htmpy"
+name = "htmlkit"
 version = "0.1"
 description = "Write HTML in Python"
 readme = "README.md"

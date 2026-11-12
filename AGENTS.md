@@ -2,7 +2,7 @@
 
 ## Project overview
 
-htmpy builds HTML with Python objects. It requires Python 3.14 or newer and uses
+htmlkit builds HTML with Python objects. It requires Python 3.14 or newer and uses
 uv for the Python development environment.
 
 ## Code style

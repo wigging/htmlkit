@@ -1,4 +1,4 @@
-"""Compare time and peak Python memory for nested HTML with htmpy and Jinja."""
+"""Compare time and peak Python memory for nested HTML with htmlkit and Jinja."""
 
 import tracemalloc
 from functools import partial
@@ -7,7 +7,7 @@ from timeit import repeat
 
 from jinja2 import Environment
 
-from htmpy import div, p, section, span
+from htmlkit import div, p, section, span
 
 DEPTHS = (10, 32, 100)
 PAYLOAD_REPEATS = (1, 256)
@@ -58,8 +58,8 @@ def main() -> None:
     print(f"{REPEAT} repeats of {NUMBER:,} renders; median time per complete render.")
     print(f"Peak memory: median of {REPEAT} separate single renders with tracemalloc.")
     print("Inputs, Jinja compilation, and validation excluded; autoescaping enabled.")
-    print("Intermediate htmpy elements are not retained; Jinja uses template loops.")
-    print(f"{'':32} | {'htmpy':^25} | {'Jinja':^25}")
+    print("Intermediate htmlkit elements are not retained; Jinja uses template loops.")
+    print(f"{'':32} | {'htmlkit':^25} | {'Jinja':^25}")
     print(
         f"{'Text chars':>10} {'Depth':>7} {'Output bytes':>13} | "
         f"{'µs/render':>12} {'Peak KiB':>12} | "
@@ -91,7 +91,7 @@ def _measure(variant: str) -> None:
             output_bytes = len(expected.encode("utf-8"))
             renderers = (
                 (
-                    "htmpy",
+                    "htmlkit",
                     partial(render_mixed, depth, text, attributed=attributed, siblings=siblings)
                     if mixed
                     else partial(render_nested, depth, text),
