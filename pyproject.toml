@@ -1,13 +1,26 @@
 [project]
 name = "htmlkit"
-version = "0.1"
+version = "26.11"
 description = "Write HTML in Python"
 readme = "README.md"
 authors = [{name = "Gavin Wiggins"}]
+license = "MIT"
+license-files = ["LICENSE.md"]
 requires-python = ">=3.14"
+classifiers = [
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Typing :: Typed",
+]
 dependencies = [
     "markupsafe>=3.0.4",
 ]
+
+[project.urls]
+Repository = "https://github.com/wigging/htmlkit"
+Issues = "https://github.com/wigging/htmlkit/issues"
 
 [build-system]
 requires = ["uv_build>=0.12.9,<0.13.0"]

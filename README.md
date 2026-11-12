@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icon.webp" alt="htmlkit icon: cyan and magenta angle brackets" width="112" height="112">
+  <img src="https://raw.githubusercontent.com/wigging/htmlkit/main/assets/icon.webp" alt="htmlkit icon with cyan and magenta angle brackets" width="112" height="112">
 </p>
 
 <h1 align="center">htmlkit</h1>
@@ -40,7 +40,21 @@ The formatted print output is:
 
 ## Installation
 
-Install htmlkit with the awesome uv tool. See <https://docs.astral.sh/uv/> for instructions on installing uv and using it to manage Python projects and dependencies.
+Requires Python 3.14 or newer.
+
+Install htmlkit with the awesome [uv](https://docs.astral.sh/uv/) package manager:
+
+```sh
+uv add htmlkit
+```
+
+Or with pip:
+
+```sh
+pip install htmlkit
+```
+
+Or install the development version directly from GitHub:
 
 ```sh
 uv add git+https://github.com/wigging/htmlkit

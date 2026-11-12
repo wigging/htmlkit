@@ -362,7 +362,7 @@ wheels = [
 
 [[package]]
 name = "htmlkit"
-version = "0.1"
+version = "26.11"
 source = { editable = "." }
 dependencies = [
     { name = "markupsafe" },
