@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/wigging/htmlkit/main/assets/icon.png" alt="htmlkit icon with cyan and magenta angle brackets" width="251" height="251">
+  <img src="https://raw.githubusercontent.com/wigging/htmlkit/main/assets/icon.webp" alt="htmlkit icon with cyan and magenta angle brackets" width="200" height="200">
 </p>
 
 <h1 align="center">htmlkit</h1>
