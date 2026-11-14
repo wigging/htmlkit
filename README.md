@@ -23,7 +23,7 @@ page = html(
 print(page)
 ```
 
-The formatted print output is:
+The output, formatted here for readability, is:
 
 ```html
 <!doctype html>

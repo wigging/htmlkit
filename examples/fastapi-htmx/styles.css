@@ -1,0 +1,15 @@
+body {
+  font-family: system-ui;
+  font-size: 1.2rem;
+  line-height: 1.4;
+  max-width: min(70ch, 100% - 4rem);
+  margin-inline: auto;
+}
+
+button {
+  font: inherit;
+}
+
+#quote {
+  color: purple;
+}
