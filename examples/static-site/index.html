@@ -1,0 +1,12 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Example</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0/styles/atom-one-dark.min.css"><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0/highlight.min.js"></script></head><body><main><h1>htmlkit</h1><p>Write HTML in Python.</p><p>Build HTML pages with Python objects instead of templates. Use htmlkit for static websites or HTML responses in web apps.</p><p>View <a href="https://github.com/wigging/htmlkit">htmlkit</a> on Github.</p><p>Go to <a href="page.html">another page</a> in this example.</p><h2>Installation</h2><p>Requires Python 3.14 or newer.</p><pre><code class="language-bash">uv add htmlkit</code></pre><h2>Example</h2><pre><code class="language-python">from htmlkit import body, h1, head, html, p, title
+
+page = html(
+    head(title(&#34;Hello from Python&#34;)),
+    body(
+        h1(&#34;Hello from Python&#34;),
+        p(&#34;Built with htmlkit.&#34;),
+    ),
+    lang=&#34;en&#34;,
+)
+
+print(page)</code></pre></main><script>hljs.highlightAll();</script></body></html>
