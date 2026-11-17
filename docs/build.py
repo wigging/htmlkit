@@ -1,19 +1,24 @@
-"""Build the docs."""
+"""Build docs/content/*.md into docs/*.html with `uv run docs/build.py`."""
 
 from pathlib import Path
 
 from layout import base_template
+from markdown_it import MarkdownIt
 
-from htmlkit import Element, Fragment, h1, p
+from htmlkit import Fragment, Raw
 
 
-def build_index() -> Element:
-    """Build the index page."""
-    content = Fragment(h1("htmlkit"), p("Hello there!"))
-    page = base_template(content)
-    return page
+def build_docs() -> None:
+    """Render each Markdown file inside the shared HTML layout."""
+    docs_dir = Path(__file__).parent
+    markdown = MarkdownIt("commonmark", {"html": False})
+
+    for source in sorted((docs_dir / "content").glob("*.md")):
+        content = Fragment(Raw(markdown.render(source.read_text(encoding="utf-8"))))
+        page = base_template(content)
+        destination = docs_dir / source.with_suffix(".html").name
+        destination.write_text(str(page), encoding="utf-8")
 
 
 if __name__ == "__main__":
-    page = build_index()
-    Path(__file__).with_name("index.html").write_text(str(page), encoding="utf-8")
+    build_docs()

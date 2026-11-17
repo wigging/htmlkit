@@ -18,6 +18,7 @@ coverage.xml
 build/
 dist/
 *.egg-info/
+/docs/*.html
 
 # Local secrets (keep example configuration trackable)
 .env
