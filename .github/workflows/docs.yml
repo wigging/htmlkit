@@ -1,0 +1,55 @@
+name: Deploy docs to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Let an in-progress deployment finish before the next one starts
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Build docs
+        run: uv run docs/build.py
+
+      # The docs directory also holds the build script and Markdown sources
+      - name: Collect HTML pages
+        run: mkdir _site && cp docs/*.html _site/
+
+      - name: Upload documentation website artifact
+        uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: _site/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5.0.1
