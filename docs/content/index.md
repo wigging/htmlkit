@@ -1,25 +1,62 @@
 # htmlkit
 
-Write HTML in Python with familiar objects instead of templates.
+Write HTML in Python.
 
-## Installation
-
-Requires Python 3.14 or newer. Install htmlkit with uv as shown below:
-
-```bash
-uv add htmlkit
-```
-
-## Getting started
+The htmlkit package allows developers to skip Jinja templates and use familiar Python tools like linters, formatters, and debuggers to build web apps more easily.
 
 ```python
-from htmlkit import body, h1, html, p
+from htmlkit import body, h1, head, html, p, title
 
-page = html(body(h1("Hello"), p("Built with htmlkit.")))
+page = html(
+    head(title("Hello from Python")),
+    body(
+        h1("Hello from Python", id="banner", style="font-style: italic;"),
+        p("Write HTML in Python with htmlkit.", class_="intro"),
+    ),
+    lang="en",
+)
+
 print(page)
 ```
 
-Read [Elements and content](elements.html) for more examples.
+The output, formatted here for readability, is:
+
+```html
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Hello from Python</title>
+  </head>
+  <body>
+    <h1 id="banner" style="font-style: italic">Hello from Python</h1>
+    <p class="intro">Write HTML in Python with htmlkit.</p>
+  </body>
+</html>
+```
+
+## Installation
+
+Requires Python 3.14 or newer.
+
+Install htmlkit with the awesome [uv](https://docs.astral.sh/uv/) package manager:
+
+```sh
+uv add htmlkit
+```
+
+Or with pip:
+
+```sh
+pip install htmlkit
+```
+
+Or install the development version directly from GitHub:
+
+```sh
+uv add git+https://github.com/wigging/htmlkit
+```
+
+Read [Elements and content](elements.html) to learn more.
 
 ## Building these docs
 

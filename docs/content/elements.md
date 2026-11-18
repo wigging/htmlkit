@@ -1,41 +1,19 @@
 # Elements and content
 
-Build a page by nesting htmlkit elements. Text is escaped automatically, and
-attributes are passed as keyword arguments.
+Use `input_`, `map_`, `object_`, and `del_` for the corresponding HTML tags that conflict with reserved Python objects; svg and math are not included. For custom tags, import `Element` and use `Element("my-widget", "Text")`. Void elements such as `meta`, `link`, and `input` do not accept children.
 
-## Text and attributes
+Children can be text, integers, elements, fragments, or nested lists and tuples; `None` is ignored. Text and attribute values are escaped automatically: `&`, `<`, `>`, `"`, and `'` become `&amp;`, `&lt;`, `&gt;`, `&#34;`, and `&#39;`, as shown below:
 
 ```python
 from htmlkit import p
 
-paragraph = p("A < B & C", class_="intro")
-print(paragraph)
+str(p("A < B & C"))
+# '<p>A &lt; B &amp; C</p>'
+
+str(p("Note", class_="note", data_id=7))
+# '<p class="note" data-id="7">Note</p>'
 ```
 
-The output is:
+Attributes are keywords, not positional mappings. A trailing underscore is stripped, then internal underscores become hyphens: `class_` becomes `class`, `for_` becomes `for`, `data_id` becomes `data-id`, and `http_equiv` becomes `http-equiv`. Attribute names become lowercase, so `ID` and `id` refer to the same attribute. `True` adds a bare attribute; `False` and `None` omit it. Supplying two keywords that normalize to the same attribute name raises `TypeError`. String, integer, and floating-point attribute values are supported; numbers use Python's `str()` representation, for example `step=0.01` becomes `step="0.01"`. Tag names, attribute names, and executable attribute values must be trusted: escaping is not sanitization.
 
-```html
-<p class="intro">A &lt; B &amp; C</p>
-```
-
-- Use `class_` for the HTML `class` attribute.
-- Use `data_id` for the HTML `data-id` attribute.
-- Set an attribute to `True` to include it without a value.
-- Set an attribute to `False` or `None` to omit it.
-
-## Lists
-
-Use `repeat()` to create an element for each item:
-
-```python
-from htmlkit import li, ul
-
-items = ul(li.repeat(["Apples", "Pears & peaches", "Oranges"]))
-print(items)
-```
-
-Return to the [documentation home](index.html).
-
-## Blah blah
-
-Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since 1966, when designers at Letraset and James Mosley, the librarian at St Bride Printing Library in London, took a 1914 Cicero translation and scrambled it to make dummy text for Letraset's Body Type sheets. It has survived not only many decades, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised thanks to these sheets and more recently with desktop publishing software like Aldus PageMaker and Microsoft Word including versions of Lorem Ipsum.
+Render with `str(element)` or `print(element)`. The `html` element adds the HTML5 doctype. Calling an existing element creates a new one, merging attributes and replacing children.

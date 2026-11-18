@@ -64,7 +64,7 @@ uv add git+https://github.com/wigging/htmlkit
 
 Use `input_`, `map_`, `object_`, and `del_` for the corresponding HTML tags that conflict with reserved Python objects; svg and math are not included. For custom tags, import `Element` and use `Element("my-widget", "Text")`. Void elements such as `meta`, `link`, and `input` do not accept children.
 
-Children can be text, integers, elements, fragments, or nested lists and tuples; `None` is ignored. Text and attribute values are escaped automatically, writing `&amp;`, `&lt;`, `&gt;`, `&#34;`, and `&#39;` produces the following:
+Children can be text, integers, elements, fragments, or nested lists and tuples; `None` is ignored. Text and attribute values are escaped automatically: `&`, `<`, `>`, `"`, and `'` become `&amp;`, `&lt;`, `&gt;`, `&#34;`, and `&#39;`, as shown below:
 
 ```python
 from htmlkit import p
@@ -78,7 +78,7 @@ str(p("Note", class_="note", data_id=7))
 
 Attributes are keywords, not positional mappings. A trailing underscore is stripped, then internal underscores become hyphens: `class_` becomes `class`, `for_` becomes `for`, `data_id` becomes `data-id`, and `http_equiv` becomes `http-equiv`. Attribute names become lowercase, so `ID` and `id` refer to the same attribute. `True` adds a bare attribute; `False` and `None` omit it. Supplying two keywords that normalize to the same attribute name raises `TypeError`. String, integer, and floating-point attribute values are supported; numbers use Python's `str()` representation, for example `step=0.01` becomes `step="0.01"`. Tag names, attribute names, and executable attribute values must be trusted: escaping is not sanitization.
 
-Render with `str(element)` or `print(element)`. The `html`` element adds the HTML5 `doctype`. Calling an existing element creates a new one, merging attributes and replacing children.
+Render with `str(element)` or `print(element)`. The `html` element adds the HTML5 doctype. Calling an existing element creates a new one, merging attributes and replacing children.
 
 ## Lists and fragments
 
@@ -152,7 +152,7 @@ The print output, shown here with formatting added, fills the template once per 
 </table>
 ```
 
-A whole bound attribute follows the usual rules: `None` and `False` omit it,`True` renders only its name, as hidden does above. Bound values are escaped like children, so an element or a `repeat()` result can be bound to nest loops. `each("owner.name")` reads a dotted path, and `bind()` is the function behind `each` for code that prefers it. A template's HTML is compiled on its first `repeat()`, so rows cost far less than building each element; an element with placeholders is meant for `repeat()`, and rendering it directly leaves the placeholders in the output.
+A whole bound attribute follows the usual rules: `None` and `False` omit it, and `True` renders only its name, as hidden does above. Bound values are escaped like children, so an element or a `repeat()` result can be bound to nest loops. `each("owner.name")` reads a dotted path, and `bind()` is the function behind `each` for code that prefers it. A template's HTML is compiled on its first `repeat()`, so rows cost far less than building each element; an element with placeholders is meant for `repeat()`, and rendering it directly leaves the placeholders in the output.
 
 Placeholders and templates keep their callbacks alive for reuse. Once they are discarded, htmlkit no longer retains the callbacks or their captured objects; completed `repeat()` results do not retain them. Use `+` rather than f-strings, `str.join()`, or other operations that discard the string subclass and its accessor references. `repeat()` raises `ValueError` if a placeholder has lost its accessor reference. Alternatively, put string formatting inside a callback, such as `each(lambda item: f"status {item.status}")`.
 

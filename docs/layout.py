@@ -8,9 +8,11 @@ from htmlkit import (
     aside,
     body,
     div,
-    h6,
+    h4,
     head,
     html,
+    i,
+    img,
     link,
     main,
     meta,
@@ -36,9 +38,20 @@ def base_template(content: Fragment) -> Element:
             ),
             link(
                 rel="stylesheet",
+                href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.2/font/bootstrap-icons.min.css",
+                integrity="sha384-nWN3KqaaVcbEsCjLSV+2jMjh62Iny/+mN3srM8TZeM8N6aj7eDl5wwYggjAJ4/sJ",
+                crossorigin="anonymous",
+            ),
+            link(
+                rel="stylesheet",
                 href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0/styles/atom-one-dark.min.css",
             ),
-            style(Raw("pre code { border-radius: 0.5rem; }")),
+            style(
+                Raw(
+                    "pre { --bs-code-font-size: var(--bs-font-size-sm); } "
+                    "pre code { border-radius: 0.5rem; }"
+                )
+            ),
             script(
                 src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0/highlight.min.js"
             ),
@@ -47,9 +60,16 @@ def base_template(content: Fragment) -> Element:
             div(
                 div(
                     aside(
-                        h6(
-                            "Navigation",
-                            class_="ps-4 pb-4 fg-secondary border-bottom",
+                        h4(
+                            img(
+                                src="https://raw.githubusercontent.com/wigging/htmlkit/main/assets/icon.webp",
+                                alt="",
+                                width=400,
+                                height=400,
+                                style="width: auto; height: 1.2em",
+                            ),
+                            "htmlkit",
+                            class_="d-flex align-items-center gap-3 ps-4 pb-4 border-bottom",
                         ),
                         nav(
                             a(
@@ -62,13 +82,34 @@ def base_template(content: Fragment) -> Element:
                                 href="elements.html",
                                 class_="nav-link justify-content-start text-wrap",
                             ),
+                            a(
+                                "Lists and fragments",
+                                href="lists-and-fragments.html",
+                                class_="nav-link justify-content-start text-wrap",
+                            ),
+                            a(
+                                "Trusted HTML",
+                                href="trusted-html.html",
+                                class_="nav-link justify-content-start text-wrap",
+                            ),
+                            a(
+                                "FastAPI web app",
+                                href="fastapi.html",
+                                class_="nav-link justify-content-start text-wrap",
+                            ),
+                            a(
+                                i(class_="bi bi-github"),
+                                "GitHub",
+                                href="https://github.com/wigging/htmlkit",
+                                class_="nav-link justify-content-start text-wrap",
+                            ),
                             class_="nav flex-column",
                             aria_label="Navigation",
                         ),
                         class_="col-12 md:col-3 md:sticky-top align-self-start",
                     ),
                     main(content, class_="col-12 md:col-9"),
-                    class_="row gy-7",
+                    class_="row gy-7 md:gx-12",
                 ),
                 class_="container py-7",
             ),
