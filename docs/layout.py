@@ -1,5 +1,7 @@
 """HTML document layout, metadata, navigation, and other site-wide elements."""
 
+from importlib.metadata import version
+
 from htmlkit import (
     Element,
     Fragment,
@@ -111,7 +113,10 @@ def base_template(content: Fragment) -> Element:
                     ),
                     main(
                         content,
-                        footer("htmlkit © 2026", class_="text-center my-12 fs-sm fg-secondary"),
+                        footer(
+                            f"htmlkit v{version('htmlkit')}",
+                            class_="text-center my-12 fs-sm fg-secondary",
+                        ),
                         class_="col-12 md:col-9",
                     ),
                     class_="row gy-7 md:gx-12",
