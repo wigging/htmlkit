@@ -40,32 +40,29 @@ Requires Python 3.14 or newer.
 
 Install htmlkit with the awesome [uv](https://docs.astral.sh/uv/) package manager:
 
-```sh
+```bash
 uv add htmlkit
 ```
 
 Or with pip:
 
-```sh
+```bash
 pip install htmlkit
 ```
 
 Or install the development version directly from GitHub:
 
-```sh
+```bash
 uv add git+https://github.com/wigging/htmlkit
 ```
 
-Read [Elements and content](elements.html) to learn more.
-
 ## Building these docs
 
-The documentation content lives in `docs/content/` as Markdown files. Run this
-command from the repository root:
+The documentation content lives in `docs/content/` as Markdown files. Run the `build.py` script to build the documentation as HTML files:
 
 ```bash
+cd htmlkit
 uv run docs/build.py
 ```
 
-Each Markdown file becomes an HTML page in `docs/`, using the shared htmlkit
-layout. Open `docs/index.html` in your browser to view the result.
+Each Markdown file becomes an HTML page in `docs/`, using the shared htmlkit layout defined in `layout.py`. Open `docs/index.html` in your browser to view the built documentation.
