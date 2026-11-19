@@ -80,6 +80,30 @@ Attributes are keywords, not positional mappings. A trailing underscore is strip
 
 Render with `str(element)` or `print(element)`. The `html` element adds the HTML5 doctype. Calling an existing element creates a new one, merging attributes and replacing children.
 
+To write attributes before content, as they appear in HTML, set the attributes first and then call the element with its children:
+
+```python
+from htmlkit import div, p
+
+str(p(class_="card my-12")("hello there!"))
+# '<p class="card my-12">hello there!</p>'
+
+str(div(class_="card")(p("First"), p("Second")))
+# '<div class="card"><p>First</p><p>Second</p></div>'
+```
+
+Chaining makes one extra call, so it is slightly slower than passing attributes after the children. To reuse the same attributes, build the element once and call it for each child; its attributes render only once, which is faster than either form:
+
+```python
+card = p(class_="card my-12")
+
+str(card("First"))
+# '<p class="card my-12">First</p>'
+
+str(card("Second"))
+# '<p class="card my-12">Second</p>'
+```
+
 ## Lists and fragments
 
 Use `repeat()` to create one element per item, sharing the same attributes:
