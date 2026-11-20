@@ -21,7 +21,6 @@ from htmlkit import (
     meta,
     nav,
     script,
-    style,
     title,
 )
 
@@ -47,14 +46,15 @@ def base_template(content: Fragment) -> Element:
             ),
             link(
                 rel="stylesheet",
+                href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0/styles/atom-one-light.min.css",
+                media="(prefers-color-scheme: light)",
+            ),
+            link(
+                rel="stylesheet",
                 href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0/styles/atom-one-dark.min.css",
+                media="(prefers-color-scheme: dark)",
             ),
-            style(
-                Raw(
-                    "pre { --bs-code-font-size: var(--bs-font-size-sm); } "
-                    "pre code { border-radius: 0.5rem; }"
-                )
-            ),
+            link(rel="stylesheet", href="styles.css"),
             script(
                 src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0/highlight.min.js"
             ),
@@ -66,7 +66,7 @@ def base_template(content: Fragment) -> Element:
                         h4(
                             img(
                                 src="https://raw.githubusercontent.com/wigging/htmlkit/main/assets/icon.webp",
-                                alt="",
+                                alt="htmlkit icon",
                                 width=400,
                                 height=400,
                                 style="width: auto; height: 1.2em",

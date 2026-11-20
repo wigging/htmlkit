@@ -1,0 +1,12 @@
+pre {
+  --bs-code-font-size: var(--bs-font-size-sm);
+}
+
+pre code {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.5rem;
+}
+
+p {
+  max-width: 80ch;
+}

@@ -32,8 +32,8 @@ jobs:
         run: uv run docs/build.py
 
       # The docs directory also holds the build script and Markdown sources
-      - name: Collect HTML pages
-        run: mkdir _site && cp docs/*.html _site/
+      - name: Collect HTML pages and styles
+        run: mkdir _site && cp docs/*.html docs/styles.css _site/
 
       - name: Upload documentation website artifact
         uses: actions/upload-pages-artifact@v5.0.0
