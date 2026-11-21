@@ -15,3 +15,5 @@ def index():
     page = html(body(h1("Hello"), p("Built with htmlkit.")))
     return HTMLResponse(page)
 ```
+
+For dynamic updates without a full page reload, see [htmx 2](htmx.html).

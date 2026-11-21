@@ -101,6 +101,11 @@ def base_template(content: Fragment) -> Element:
                                 class_="nav-link justify-content-start text-wrap",
                             ),
                             a(
+                                "htmx syntax",
+                                href="htmx.html",
+                                class_="nav-link justify-content-start text-wrap",
+                            ),
+                            a(
                                 i(class_="bi bi-github"),
                                 "GitHub",
                                 href="https://github.com/wigging/htmlkit",
