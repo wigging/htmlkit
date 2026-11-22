@@ -42,6 +42,7 @@ def base_template(content: Fragment, current_page: str) -> Element:
             ("FastAPI web app", "fastapi.html"),
             ("htmx syntax", "htmx.html"),
             ("Code examples", "examples.html"),
+            ("Benchmarks", "benchmarks.html"),
         )
     ]
     page = html(

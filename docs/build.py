@@ -11,7 +11,7 @@ from htmlkit import Fragment, Raw
 def build_docs() -> None:
     """Render each Markdown file inside the shared HTML layout."""
     docs_dir = Path(__file__).parent
-    markdown = MarkdownIt("commonmark", {"html": False})
+    markdown = MarkdownIt("commonmark", {"html": False}).enable("table")
 
     for source in sorted((docs_dir / "content").glob("*.md")):
         content = Fragment(Raw(markdown.render(source.read_text(encoding="utf-8"))))

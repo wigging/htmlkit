@@ -19,3 +19,16 @@ pre code {
 p {
   max-width: 80ch;
 }
+
+main table {
+  display: block;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+main th, main td {
+  padding: 0.25rem 0.75rem;
+  border-bottom: 1px solid var(--bs-border-color);
+  white-space: nowrap;
+}
