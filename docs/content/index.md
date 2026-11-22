@@ -66,3 +66,7 @@ uv run docs/build.py
 ```
 
 Each Markdown file becomes an HTML page in `docs/`, using the shared htmlkit layout defined in `layout.py`. Open `docs/index.html` in your browser to view the built documentation.
+
+## Contributing
+
+See the [contributing guide](https://github.com/wigging/htmlkit/blob/main/CONTRIBUTING.md) for how to report a bug, run the checks, or submit a pull request.

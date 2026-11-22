@@ -72,12 +72,4 @@ uv run docs/build.py
 
 ## Contributing
 
-Contribute to this project by submitting a pull request or issue. Pull requests should pass all checks and tests before submitting.
-
-```bash
-uv sync
-uv run ruff check .
-uv run ruff format --check .
-uv run ty check
-uv run pytest
-```
+See the [contributing guide](https://github.com/wigging/htmlkit/blob/main/CONTRIBUTING.md) for how to report a bug, run the checks, or submit a pull request.
