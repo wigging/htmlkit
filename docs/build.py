@@ -15,8 +15,8 @@ def build_docs() -> None:
 
     for source in sorted((docs_dir / "content").glob("*.md")):
         content = Fragment(Raw(markdown.render(source.read_text(encoding="utf-8"))))
-        page = base_template(content)
         destination = docs_dir / source.with_suffix(".html").name
+        page = base_template(content, destination.name)
         destination.write_text(str(page), encoding="utf-8")
 
 

@@ -1,6 +1,6 @@
 # htmx syntax
 
-htmlkit works with [htmx 2](https://v2.htmx.org/docs/) through ordinary HTML attributes; no adapter is needed. The `examples/fastapi-htmx/` app uses htmx 2.0.11 with a pinned CDN URL and integrity hash. Run it from the repository root:
+The htmlkit package works with [htmx 2](https://v2.htmx.org/docs/) through ordinary HTML attributes; no adapter is needed. The `examples/fastapi-htmx/` app uses htmx 2.0.11 with a pinned CDN URL and integrity hash. Run it from the repository root:
 
 ```bash
 uv run fastapi dev examples/fastapi-htmx/app.py
@@ -81,5 +81,3 @@ load = button(
 ```
 
 Use kebab-case event names (`before-request`, not `beforeRequest`), because HTML attribute names are lowercase. Handler scripts must be trusted application code; escaping does not make user-supplied JavaScript safe.
-
-For applications migrating from htmx 1, see the [htmx 2 migration guide](https://v2.htmx.org/migration-guide-htmx-1/). htmx 2 defaults to same-origin requests and sends `DELETE` parameters in the URL. SSE and WebSocket support require separately loaded extensions, not the old `hx_sse` or `hx_ws` attributes. htmlkit renders attributes but does not load extensions or change htmx's configuration.

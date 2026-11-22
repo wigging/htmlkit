@@ -69,7 +69,7 @@ def base_template(filename: str, heading: str, content: Fragment) -> Element:
                         nav(
                             nav_link("Home", "index.html", filename),
                             nav_link("About", "about.html", filename),
-                            class_="nav md:flex-column theme-primary",
+                            class_="nav md:flex-column theme-inverse card p-4 bg-1",
                             aria_label="Pages",
                         ),
                         class_="col-12 md:col-3",
@@ -101,11 +101,16 @@ def build_about() -> Fragment:
     """Return the content for the About page."""
     return Fragment(
         p(
+            "The ",
             code("build.py"),
             " writes both pages from the same layout. You can open either HTML "
             "file in a browser without running a web server.",
         ),
-        p(a("Read the htmlkit documentation", href="https://gavinw.me/htmlkit/")),
+        p(
+            "Read the ",
+            a("htmlkit", href="https://gavinw.me/htmlkit/"),
+            " documentation to learn more.",
+        ),
     )
 
 

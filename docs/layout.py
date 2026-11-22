@@ -25,8 +25,25 @@ from htmlkit import (
 )
 
 
-def base_template(content: Fragment) -> Element:
-    """Build the base template used for HTML pages."""
+def base_template(content: Fragment, current_page: str) -> Element:
+    """Build a documentation page with its current sidebar link marked."""
+    page_links = [
+        a(
+            label,
+            href=href,
+            class_="nav-link justify-content-start text-wrap",
+            aria_current="page" if href == current_page else None,
+        )
+        for label, href in (
+            ("Overview", "index.html"),
+            ("Elements and content", "elements.html"),
+            ("Lists and fragments", "lists-and-fragments.html"),
+            ("Trusted HTML", "trusted-html.html"),
+            ("FastAPI web app", "fastapi.html"),
+            ("htmx syntax", "htmx.html"),
+            ("Code examples", "examples.html"),
+        )
+    ]
     page = html(
         head(
             meta(charset="utf-8"),
@@ -75,36 +92,7 @@ def base_template(content: Fragment) -> Element:
                             class_="d-flex align-items-center gap-3 ps-4 pb-4 border-bottom",
                         ),
                         nav(
-                            a(
-                                "Overview",
-                                href="index.html",
-                                class_="nav-link justify-content-start text-wrap",
-                            ),
-                            a(
-                                "Elements and content",
-                                href="elements.html",
-                                class_="nav-link justify-content-start text-wrap",
-                            ),
-                            a(
-                                "Lists and fragments",
-                                href="lists-and-fragments.html",
-                                class_="nav-link justify-content-start text-wrap",
-                            ),
-                            a(
-                                "Trusted HTML",
-                                href="trusted-html.html",
-                                class_="nav-link justify-content-start text-wrap",
-                            ),
-                            a(
-                                "FastAPI web app",
-                                href="fastapi.html",
-                                class_="nav-link justify-content-start text-wrap",
-                            ),
-                            a(
-                                "htmx syntax",
-                                href="htmx.html",
-                                class_="nav-link justify-content-start text-wrap",
-                            ),
+                            *page_links,
                             a(
                                 i(class_="bi bi-github"),
                                 "GitHub",

@@ -1,3 +1,12 @@
+aside .nav-link[aria-current="page"] {
+  color: var(--bs-fg-body);
+  font-weight: var(--bs-font-weight-bold);
+}
+
+main {
+  --bs-link-decoration: underline dotted 1px color-mix(in srgb, currentColor 75%, transparent);
+}
+
 pre {
   --bs-code-font-size: var(--bs-font-size-sm);
 }

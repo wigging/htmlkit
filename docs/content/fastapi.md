@@ -16,4 +16,4 @@ def index():
     return HTMLResponse(page)
 ```
 
-For dynamic updates without a full page reload, see [htmx 2](htmx.html).
+For dynamic pages updates without a full page reload, see the [htmx syntax](htmx.html) discussion.

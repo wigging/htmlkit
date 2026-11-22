@@ -58,7 +58,7 @@ uv add git+https://github.com/wigging/htmlkit
 
 ## Building these docs
 
-The documentation content lives in `docs/content/` as Markdown files. Run the `build.py` script to build the documentation as HTML files:
+The documentation content lives in `docs/content/` as Markdown files in the GitHub repository. Run the `build.py` script to build the documentation as HTML files:
 
 ```bash
 cd htmlkit

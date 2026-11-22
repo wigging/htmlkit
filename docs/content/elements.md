@@ -1,6 +1,6 @@
 # Elements and content
 
-Use `input_`, `map_`, `object_`, and `del_` for the corresponding HTML tags that conflict with reserved Python objects; svg and math are not included. For custom tags, import `Element` and use `Element("my-widget", "Text")`. Void elements such as `meta`, `link`, and `input` do not accept children.
+Use `class_`, `input_`, `map_`, `object_`, and `del_` for the corresponding HTML tags that conflict with reserved Python objects; svg and math are not included. For custom tags, import `Element` and use `Element("my-widget", "Text")`. Void elements such as `meta`, `link`, and `input` do not accept children.
 
 Children can be text, integers, elements, fragments, or nested lists and tuples; `None` is ignored. Text and attribute values are escaped automatically: `&`, `<`, `>`, `"`, and `'` become `&amp;`, `&lt;`, `&gt;`, `&#34;`, and `&#39;`, as shown below:
 
@@ -23,10 +23,12 @@ To write attributes before content, as they appear in HTML, set the attributes f
 ```python
 from htmlkit import div, p
 
-str(p(class_="card my-12")("hello there!"))
+ex1 = p(class_="card my-12")("hello there!")
+str(ex1)
 # '<p class="card my-12">hello there!</p>'
 
-str(div(class_="card")(p("First"), p("Second")))
+ex2 = div(class_="card")(p("First"), p("Second"))
+str(ex2)
 # '<div class="card"><p>First</p><p>Second</p></div>'
 ```
 
