@@ -31,7 +31,7 @@ uv for the Python development environment.
 
 Run the standard checks after changing Python code:
 
-```sh
+```bash
 uv run ruff check .
 uv run ruff format --check .
 uv run ty check
@@ -40,7 +40,7 @@ uv run pytest
 
 For a focused test run during development:
 
-```sh
+```bash
 uv run pytest tests/test_elements.py -k escaping
 ```
 
@@ -50,7 +50,11 @@ Run the benchmark scripts to evaluate performance of the package after critical
 changes have been made to the source code. Benchmarks do not need to be run for
 minor or less critical changes.
 
-```sh
+```bash
+uv run benchmarks/escaping.py
+uv run benchmarks/fragments.py
+uv run benchmarks/nested.py
+uv run benchmarks/realistic_page.py
 uv run benchmarks/simple_page.py
 uv run benchmarks/unordered_list.py
 ```

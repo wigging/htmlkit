@@ -1,6 +1,6 @@
 [project]
 name = "htmlkit"
-version = "26.11"
+version = "26.11.1"
 description = "Write HTML in Python"
 readme = "README.md"
 authors = [{name = "Gavin Wiggins"}]

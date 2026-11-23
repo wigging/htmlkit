@@ -62,7 +62,7 @@ uv add git+https://github.com/wigging/htmlkit
 
 ## Documentation
 
-The online documentation at [gavinw.me/htmlkit](https://gavinw.me/htmlkit/) covers elements and attributes, lists and fragments, trusted HTML, and using htmlkit with FastAPI.
+Documentation is available at <https://gavinw.me/htmlkit>.
 
 The documentation is written as Markdown files in the `docs/content/` directory. The `docs/build.py` script renders them into HTML pages in `docs/` using the layout in `docs/layout.py`. Build the documentation locally with:
 
